@@ -5,7 +5,8 @@ import threading
 import pickle
 import cv2
 import struct
-
+import base64
+import numpy as np
 end_call = 0
 current_call = 0
 
@@ -127,11 +128,11 @@ def manage_call(callSocket,client):
 
 def video_receiver(client):
     global end_call
-    receiverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    receiverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     receiverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     receiverSocket.bind(('',8003))
-    receiverSocket.listen()
-    conn, addr = receiverSocket.accept()
+    #receiverSocket.listen()
+    #conn, addr = receiverSocket.accept()
 
     data = b'' ### CHANGED
     payload_size = struct.calcsize("L") ### CHANGED
@@ -139,8 +140,7 @@ def video_receiver(client):
     while end_call == 0:
 
         # Retrieve message size
-        while(len(data) < payload_size):
-            data += conn.recv(4096)
+        data,_ = receiverSocket.recvfrom(4096)
 
         packed_msg_size = data[:payload_size]
         data = data[payload_size:]
@@ -148,13 +148,15 @@ def video_receiver(client):
 
         # Retrieve all data based on message size
         while len(data) < msg_size:
-            data += conn.recv(4096)
+            data_temp,_ = receiverSocket.recvfrom(4096)
+            data += data_temp
 
-        frame_data = data[:msg_size]
-        data = data[msg_size:]
-
+        #frame_data = data[:msg_size]
+        #data = data[msg_size:]
+        frame = cv2.imdecode(np.frombuffer(data, np.uint8), 1)
         # Extract frame
-        frame = pickle.loads(frame_data)
+        #decimg = cv2.resize(frae, RESOLUCION_HIGH_VALUE)
+
 
         # Display
         cv2.imshow('frame', frame)
@@ -163,27 +165,31 @@ def video_receiver(client):
 
 def video_sender(client):
     global end_call
-    senderSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    WIDTH=400
+    senderSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     senderSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    senderSocket.connect(('localhost',8003))
+    #senderSocket.connect(('localhost',8003))
     
     cap = cv2.VideoCapture(0)
     
     while(end_call == 0):
         ret, frame = cap.read()
-
         if not ret:
             print("Can't receive frame (stream end?). Exiting ...")
             break
     
+        encode_param = [cv2.IMWRITE_JPEG_QUALITY, 50]
+        result, encimg = cv2.imencode('.jpg', frame, encode_param)
         # Serialize frame
-        data = pickle.dumps(frame)
+        data = encimg.tobytes()
+        #data = pickle.dumps(frame)
 
         # Send message length first
         message_size = struct.pack("L", len(data)) ### CHANGED
-
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
         # Then data
-        senderSocket.sendall(message_size + data)
+        senderSocket.sendto(message_size + data,('localhost',8003))
 
 
 
