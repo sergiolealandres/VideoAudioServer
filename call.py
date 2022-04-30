@@ -9,21 +9,22 @@ import struct
 import base64
 import numpy as np
 from practica3_client import *
+import heapq
 end_call = 0
 current_call = 0
 
 def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
     global current_call
-
+    global connectionSocket
     serverName = target_IP
     serverPort = target_port
-    clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    clientSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    clientSocket.connect((serverName,int(serverPort)))
+    connectionSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    connectionSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    connectionSocket.connect((serverName,int(serverPort)))
     #sentence = "CALLING "+ target_nick + " "+ user_IP + ":"+ str(user_Port)
     sentence = "CALLING "+ client.my_nick + " "+ str(client.my_data_port)
-    clientSocket.send(sentence.encode())
-    modifiedSentence = clientSocket.recv(1024)
+    connectionSocket.send(sentence.encode())
+    modifiedSentence = connectionSocket.recv(1024)
     modifiedSentence = modifiedSentence.decode('utf-8')
     print("Se ha recibido:")
     print(modifiedSentence)
@@ -46,11 +47,11 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
         client.selected_ip=ip
         semaforo.release()
         print("post-lock call")
-        thr = threading.Thread(target=manage_call,args = (clientSocket,client,))
+        thr = threading.Thread(target=manage_call,args = (connectionSocket,client,))
         thr.start()
         return 0
 
-    clientSocket.close()
+    #connectionSocket.close()
 
     if modifiedSentence[:9] == "CALL_BUSY":
         return 1
@@ -58,17 +59,6 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
         return 2
 
 def call_waiter(user_Port,client,semaforo):
-
-    while True:
-        callSocket = wait_call(user_Port,client,semaforo)
-        if callSocket is None:
-            return
-        thr = threading.Thread(target=video_receiver,args = (callSocket,))
-        thr.start()
-        
-
-def wait_call(user_Port,client,semaforo):
-    global current_call
 
     waitingSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     waitingSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -83,10 +73,22 @@ def wait_call(user_Port,client,semaforo):
         client.app.setTabbedFrameDisabledTab("Tabs", "SEARCH USER", True)
 
         return None
-       
+
+    while True:
+        callSocket = wait_call(user_Port,client,semaforo,waitingSocket)
+        if callSocket is None:
+            
+            return
+        thr = threading.Thread(target=manage_call,args = (callSocket,client,))
+        thr.start()
+        
+
+def wait_call(user_Port,client,semaforo,waitingSocket):
+    global current_call
+    global connectionSocket
 
     #waitingSocket.bind(('', int(user_Port)))
-    waitingSocket.listen(1)#aqui hay que poner más para el call_busy
+    waitingSocket.listen(2)#aqui hay que poner más para el call_busy
     print("Servidor preparado para recibir")
     
 
@@ -124,6 +126,11 @@ def wait_call(user_Port,client,semaforo):
                 
                     current_call = 1
                     semaforo.release()
+                    client.selected_data_port=words[2]
+                    data=query(words[1])
+                    nick, ip, control_port, versions=data
+
+                    client.selected_ip=ip
 
                     mensaje = "CALL_ACCEPTED "+client.my_nick+" "+client.my_data_port
                     connectionSocket.send(mensaje.encode())
@@ -136,7 +143,7 @@ def wait_call(user_Port,client,semaforo):
         elif sentence[:11] == "CALL_RESUME":
             client.notify("CALL_RESUME")
         elif sentence[:8] == "CALL_END":
-            client.notify("CALL_END")
+            call_end(client)
         else:
             print("Se ha recibido algo que no es")
             connectionSocket.close()
@@ -144,8 +151,8 @@ def wait_call(user_Port,client,semaforo):
 
 
 def manage_call(callSocket,client):
-    client.hold_call = 0
-    client.end_call = 0
+    global hold_call
+    global end_call
 
     receiver = threading.Thread(target=video_receiver,args = (client,))
     receiver.start()
@@ -153,31 +160,32 @@ def manage_call(callSocket,client):
     sender = threading.Thread(target=video_sender,args = (client,))
     sender.start()
 
-    receiver.join()
-    sender.join()
+    client.app.showSubWindow("Panel de la llamada")
 
-    print("Not implemented")
 
 def video_receiver(client):
     global end_call
     receiverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     receiverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    receiverSocket.bind(('',8003))
+    receiverSocket.bind((client.my_ip,int(client.my_data_port)))
     #receiverSocket.listen()
     #conn, addr = receiverSocket.accept()
 
     data = b'' ### CHANGED
-    payload_size = struct.calcsize("L") ### CHANGED
+    #payload_size = struct.calcsize("L") ### CHANGED
 
-    while end_call == 0:
+    while end_call == 0 and client.app.alive:
 
         # Retrieve message size
         data,_ = receiverSocket.recvfrom(60000)
 
-        data=data.split('#')
+        data=data.split(b'#')
+        order_num, timestamp, resolucion, fps=data[0], data[1], data[2], data[3]
+
+        real_data=b"#".join(data[4:])
 
         #packed_msg_size = data[:payload_size]
-        data = data[-1]
+        
         #msg_size = struct.unpack("L", packed_msg_size)[0] ### CHANGED
 
         # Retrieve all data based on message size
@@ -185,10 +193,11 @@ def video_receiver(client):
 
         #frame_data = data[:msg_size]
         #data = data[msg_size:]
-        frame = cv2.imdecode(np.frombuffer(data, np.uint8), 1)
+        frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
         # Extract frame
-        #decimg = cv2.resize(frae, RESOLUCION_HIGH_VALUE)
+        #frame_ = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
+        #frame__= ImageTk.PhotoImage(Image.fromarray(frame_))
 
         # Display
         cv2.imshow('frame', frame)
@@ -202,10 +211,13 @@ def video_sender(client):
     senderSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     
     order_num=0
+
     cap = cv2.VideoCapture(0)
-    
+
     while(end_call == 0):
+
         ret, frame = cap.read()
+
         if not ret:
             print("Can't receive frame (stream end?). Exiting ...")
             break
@@ -217,14 +229,26 @@ def video_sender(client):
         #data = pickle.dumps(frame)
 
         # Send message length first
-        header=order_num+'#'+time.time()+'#'+"640+380"+"120"
-        header_bytes=header.tobytes()
-        hostname = socket.gethostname()
-        local_ip = socket.gethostbyname(hostname)
+        header=str(order_num)+'#'+str(time.time())+'#'+client.resolucion+"#"+"36"+"#"
+        order_num+=1
+        print("e")
+        header_bytes=bytes(header, 'utf-8')
+        
         # Then data
         #senderSocket.sendto(message_size + data,('localhost',8003))
         senderSocket.sendto(header_bytes + data,(client.selected_ip,int(client.selected_data_port)))
 
+
+def call_end(client):
+
+    global connectionSocket
+    global end_call
+    client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
+    end_call=1
+    time.sleep(0.5)
+    message = 'CALL_END ' + client.my_nick
+    message = bytes(message, 'utf-8')
+    connectionSocket.send(message)
 
 
 '''

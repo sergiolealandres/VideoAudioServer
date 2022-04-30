@@ -1,10 +1,13 @@
 # import the library
+from ast import Call
+import threading
 from appJar import gui
 from PIL import Image, ImageTk
+from call import call_end, call, call_waiter
 import cv2
 from conexion_servidor import *
 from verification import *
-from call import *
+
 
 class VideoClient(object):
 
@@ -18,7 +21,7 @@ class VideoClient(object):
 	s.close()
 	imagen_no_camera="imgs/nocamera.gif"
 	accepted_call=0
-	
+	resolucion = "640x480"
 
 	def __init__(self, window_size):
 		
@@ -38,7 +41,7 @@ class VideoClient(object):
 		#self.app.registerEvent(self.capturaVideo)
 		
 		# Añadir los botones
-		self.app.addButtons(["Desconectar Cam", "Colgar", "Salir"], self.buttonsCallback)
+		self.app.addButtons(["Desconectar Cam", "Salir"], self.buttonsCallback)
 		self.app.setButton("Desconectar Cam", "Conectar Cam")
 		self.app.setButtonFont(size=12, weight="bold", underline=False)
 
@@ -48,8 +51,8 @@ class VideoClient(object):
 		self.app.stopSubWindow()
 
 
-		self.app.startSubWindow("Ventana de llamada", modal=True)
-		self.app.addButtons(["Pausar", "Renaudar"], self.buttonsCallback)
+		self.app.startSubWindow("Panel de la llamada", modal=True)
+		self.app.addButtons(["Colgar","Pausar", "Renaudar"], self.buttonsCallback)
 		self.app.addLabel("Tiempo llamada", "00:00")
 		self.app.addLabel("Fps", "0 fps")
 		self.app.stopSubWindow()
@@ -285,8 +288,10 @@ class VideoClient(object):
 		elif button =="Rechazar":
 			self.accepted_call=-1
 
+		elif button == "Colgar":
+			call_end(self)
 
-		elif button=='Desconectar Cam':
+
 			
 
 			if self.camera_conected==0:
