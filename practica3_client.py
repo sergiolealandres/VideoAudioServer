@@ -1,22 +1,24 @@
 # import the library
 from appJar import gui
 from PIL import Image, ImageTk
-import numpy as np
 import cv2
-import socket
 from conexion_servidor import *
 from verification import *
+from call import *
 
 class VideoClient(object):
 
-	selected_nick, selected_ip, selected_control_port, selected_version=None,None, None,None
+	selected_nick, selected_ip, selected_control_port, selected_data_port,selected_version=None,None, None,None,None
 	camera_conected=0
+	semaforo=threading.Lock()
 	my_nick, my_ip, my_control_port, my_data_port, my_versions=None,None,None,None,None
 	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	s.connect(("8.8.8.8", 80))
 	local_IP = s.getsockname()[0]
 	s.close()
 	imagen_no_camera="imgs/nocamera.gif"
+	accepted_call=0
+	
 
 	def __init__(self, window_size):
 		
@@ -41,13 +43,13 @@ class VideoClient(object):
 		self.app.setButtonFont(size=12, weight="bold", underline=False)
 
 		self.app.startSubWindow("LLamada entrante", title="Recepción de llamada", modal=True)
-		self.app.addLabel("Nick entrante", "Te esta llamando...")
+		self.app.addLabel("Nick entrante", "")
 		self.app.addButtons(["Aceptar", "Rechazar"], self.buttonsCallback)
 		self.app.stopSubWindow()
 
 
 		self.app.startSubWindow("Ventana de llamada", modal=True)
-		self.app.addButtons(["Colgar", "Pausar", "Renaudar"], self.buttonsCallback)
+		self.app.addButtons(["Pausar", "Renaudar"], self.buttonsCallback)
 		self.app.addLabel("Tiempo llamada", "00:00")
 		self.app.addLabel("Fps", "0 fps")
 		self.app.stopSubWindow()
@@ -110,7 +112,7 @@ class VideoClient(object):
 		if frame is None and ret==False:
 			
 			return
-		frame = cv2.resize(frame, (532,320))
+		frame = cv2.resize(frame, (500,300))
 		cv2_im = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
 		img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))		    
 
@@ -134,32 +136,56 @@ class VideoClient(object):
 		elif resolution == "HIGH":
 			self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640) 
 			self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480) 
+
+	def has_call_been_accepted(self):
+		while self.accepted_call==0:
+			continue
+
+		return self.accepted_call
+
 				
 	# Función que gestiona los callbacks de los botones
 	def buttonsCallback(self, button):
 
 		if button =="Registrarse":
 
+			if len(self.app.getEntry("Nick\t\t"))==0 or len(self.app.getEntry("Contraseña\t"))==0 \
+				or len(self.app.getEntry("IP\t\t"))==0 or len(self.app.getEntry("Protocolo\t\t"))==0 \
+				or len(self.app.getEntry("Puerto Control\t\t"))==0 \
+				or len(self.app.getEntry("Puerto Datos\t\t"))==0:
+				
+				self.app.infoBox("Error","Some fields are not completed")
+				return
+
 			self.my_nick = self.app.getEntry("Nick\t\t")
+			print(self.my_nick)
+			if self.my_nick.count(" ")>0:
+				self.app.infoBox("Error","Not valid Nick format")
+				self.buttonsCallback("Clean")
+				return
+
 			password = self.app.getEntry("Contraseña\t")
 
-            
+			
 			self.my_ip = self.app.getEntry("IP\t\t")
 			
 			self.my_versions = self.app.getEntry("Protocolo\t\t")
-			self.my_control_port = self.app.getEntry("Puerto Control\t\t")
-			self.my_data_port = self.app.getEntry("Puerto Datos\t\t")
+			self.my_control_port =(self.app.getEntry("Puerto Control\t\t"))
+			self.my_data_port = (self.app.getEntry("Puerto Datos\t\t"))
 
 			if validIP(self.my_ip)==False:
 				self.app.infoBox("Error","Not valid IP")
+				self.buttonsCallback("Clean")
 				return
 
 			if validPort(self.my_control_port)==False:
 				self.app.infoBox("Error","Not valid control port")
+				self.buttonsCallback("Clean")
 				return
 
 			if validPort(self.my_data_port)==False:
 				self.app.infoBox("Error","Not valid data port")
+				self.buttonsCallback("Clean")
 				return
 
 			if register(self.my_nick, self.my_ip, self.my_control_port, password, self.my_versions)==False:
@@ -167,10 +193,12 @@ class VideoClient(object):
 				self.app.infoBox("Error","Wrong Password")
 				return
 
-			self.app.infoBox("OK","Succesfull Register")
-			self.buttonsCallback("Clean")
+			
+			
 			self.app.setTabbedFrameDisabledTab("Tabs", "LIST USERS", False)
 			self.app.setTabbedFrameDisabledTab("Tabs", "SEARCH USER", False)
+			thr = threading.Thread(target=call_waiter,args = (self.my_control_port, self, self.semaforo))
+			thr.start()
 
 
 		elif button =="Search":
@@ -183,6 +211,7 @@ class VideoClient(object):
 				return
 			
 			self.selected_nick, self.selected_ip, self.selected_control_port, self.selected_version = data
+			self.selected_control_port=(self.selected_control_port)
 			nick=self.app.setLabel("UserInfo", "Nick = " + nick + "\nIp = " +self.selected_ip + "\nPuerto de control = " + self.selected_control_port + "\nVersión = " + self.selected_version)
 
 		elif button =="Call":
@@ -191,8 +220,12 @@ class VideoClient(object):
 				self.app.infoBox("Error", self.selected_ip + " no es una ip válida")
 				return
 
+			if validPort(self.selected_control_port)==False:
+				self.app.infoBox("Error","Not valid control port")
+				return
 
-			print("todo ok")
+			
+			call(self.selected_nick, self.selected_ip, self.selected_control_port, self.my_ip, self.my_control_port, self.semaforo,self)
 
 			
 		elif button == "LLamar al usuario seleccionado":
@@ -210,7 +243,7 @@ class VideoClient(object):
 				return
 
 			self.selected_nick, self.selected_ip, self.selected_control_port, self.selected_version = data
-
+			self.selected_control_port=(self.selected_control_port)
 			if validIP(self.selected_ip)==False:
 				self.app.infoBox("Error", self.selected_ip + " no es una ip válida")
 				return
@@ -246,6 +279,13 @@ class VideoClient(object):
 			self.app.stop() 
 
 
+		elif button =="Aceptar":
+			self.accepted_call=1
+
+		elif button =="Rechazar":
+			self.accepted_call=-1
+
+
 		elif button=='Desconectar Cam':
 			
 
@@ -265,7 +305,7 @@ class VideoClient(object):
 
 if __name__ == '__main__':
 
-	vc = VideoClient("640x520")
+	vc = VideoClient("640x670")
 
 	# Crear aquí los threads de lectura, de recepción y,
 	# en general, todo el código de inicialización que sea necesario
@@ -276,3 +316,4 @@ if __name__ == '__main__':
 	# El control ya NO vuelve de esta función, por lo que todas las
 	# acciones deberán ser gestionadas desde callbacks y threads
 	vc.start()
+

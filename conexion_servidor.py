@@ -8,10 +8,10 @@ def register(nick, ip, port, password, versions):
     
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     clientSocket.connect((serverName,serverPort))
+
     sentence = 'REGISTER '+ nick +' '+ ip +' '+ port+' '+ password+' '+versions
     clientSocket.send(sentence.encode())
     answer = clientSocket.recv(1024)
-    
     clientSocket.close()
     if answer[:10].decode('utf-8')=='OK WELCOME':
         return True
@@ -45,13 +45,12 @@ def list_users():
     clientSocket.connect((serverName,serverPort))
     sentence = 'LIST_USERS'
     clientSocket.send(sentence.encode())
-
     answer=b''
-    while True:
-        
-        new_answer = clientSocket.recv(buffsize)
-        answer+=new_answer
-        if len(new_answer)<buffsize:
+    clientSocket.settimeout(1)
+    while True:   
+        try:
+            answer += clientSocket.recv(buffsize)
+        except socket.timeout:
             break
         
     answer=answer.decode('utf-8')
