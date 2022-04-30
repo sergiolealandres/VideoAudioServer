@@ -3,7 +3,7 @@ from ast import Call
 import threading
 from appJar import gui
 from PIL import Image, ImageTk
-from call import call_end, call, call_waiter
+from call import *
 import cv2
 from conexion_servidor import *
 from verification import *
@@ -22,6 +22,9 @@ class VideoClient(object):
 	imagen_no_camera="imgs/nocamera.gif"
 	accepted_call=0
 	resolucion = "640x480"
+	video_para_mostrar="imgs/video_por_defecto.gif"
+	video_mostrado=0
+	enviando=None
 
 	def __init__(self, window_size):
 		
@@ -36,6 +39,7 @@ class VideoClient(object):
 		# Registramos la función de captura de video
 		# Esta misma función también sirve para enviar un vídeo
 		self.cap = cv2.VideoCapture(self.imagen_no_camera)
+		
 		self.mode_webcam = False
 		self.app.setPollTime(20)
 		#self.app.registerEvent(self.capturaVideo)
@@ -52,9 +56,10 @@ class VideoClient(object):
 
 
 		self.app.startSubWindow("Panel de la llamada", modal=True)
-		self.app.addButtons(["Colgar","Pausar", "Renaudar"], self.buttonsCallback)
-		self.app.addLabel("Tiempo llamada", "00:00")
-		self.app.addLabel("Fps", "0 fps")
+		self.app.addButtons(["Colgar","Pausar", "Renaudar", "Webcam", "Video"], self.buttonsCallback)
+		#self.app.addLabel("Fps", "0 fps")
+		self.app.addLabelEntry("Enviar Video", 2, 0)
+		self.app.setEntry("Enviar Video", self.video_para_mostrar)
 		self.app.stopSubWindow()
 
 		with self.app.tabbedFrame("Tabs"):
@@ -255,8 +260,7 @@ class VideoClient(object):
 				self.app.infoBox("Error","Not valid control port")
 				return
 
-			print("todo ok")
-			#aquí llamo al nick
+			call(self.selected_nick, self.selected_ip, self.selected_control_port, self.my_ip, self.my_control_port, self.semaforo,self)
 
 
 		elif button == 'Actualizar':
@@ -281,6 +285,36 @@ class VideoClient(object):
 	    	
 			self.app.stop() 
 
+		elif button == 'Webcam':
+
+			if self.video_mostrado==0:
+				return
+
+			self.video_mostrado=0
+
+
+
+		elif button == 'Video':
+
+			fichero=self.app.getEntry("Enviar Video")
+
+			if len(fichero)==0:
+
+				self.app.infoBox("Error","Debes de introducir el nombre de un video ")
+				return
+
+			try:
+				file = open(fichero, 'r')
+				file.close()
+			except FileNotFoundError:
+				self.app.infoBox("Error", "No se ha podido encontrar el archivo, prueba de nuevo")
+				return
+
+			self.enviando = cv2.VideoCapture(fichero)
+
+			self.video_mostrado=fichero
+
+
 
 		elif button =="Aceptar":
 			self.accepted_call=1
@@ -292,7 +326,7 @@ class VideoClient(object):
 			call_end(self)
 
 
-			
+		elif button == "Desconectar Cam":	
 
 			if self.camera_conected==0:
 				

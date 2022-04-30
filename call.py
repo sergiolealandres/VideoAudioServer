@@ -75,12 +75,10 @@ def call_waiter(user_Port,client,semaforo):
         return None
 
     while True:
-        callSocket = wait_call(user_Port,client,semaforo,waitingSocket)
-        if callSocket is None:
-            
-            return
-        thr = threading.Thread(target=manage_call,args = (callSocket,client,))
-        thr.start()
+        
+        wait_call(user_Port,client,semaforo,waitingSocket)
+        
+        
         
 
 def wait_call(user_Port,client,semaforo,waitingSocket):
@@ -91,10 +89,11 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
     waitingSocket.listen(2)#aqui hay que poner más para el call_busy
     print("Servidor preparado para recibir")
     
-
+    connectionSocket, addr = waitingSocket.accept()
     while client.app.alive:
         print("Empezamos bucle")
-        connectionSocket, addr = waitingSocket.accept()
+        
+        print("ITERACION")
         sentence = connectionSocket.recv(1024)
         sentence = sentence.decode('utf-8')
         print("Se ha recibido:")
@@ -134,7 +133,8 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
 
                     mensaje = "CALL_ACCEPTED "+client.my_nick+" "+client.my_data_port
                     connectionSocket.send(mensaje.encode())
-                    return connectionSocket
+                    thr = threading.Thread(target=manage_call,args = (connectionSocket,client,))
+                    thr.start()
                 else:
                     mensaje = "CALL_DENIED "+words[1]
                     connectionSocket.send(mensaje.encode())
@@ -144,9 +144,13 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
             client.notify("CALL_RESUME")
         elif sentence[:8] == "CALL_END":
             call_end(client)
+            break
         else:
             print("Se ha recibido algo que no es")
-            connectionSocket.close()
+            
+            break
+
+    connectionSocket.close()
 
 
 
@@ -212,11 +216,11 @@ def video_sender(client):
     
     order_num=0
 
-    cap = cv2.VideoCapture(0)
+    client.enviando = cv2.VideoCapture(client.video_mostrado)
 
     while(end_call == 0):
 
-        ret, frame = cap.read()
+        ret, frame = client.enviando.read()
 
         if not ret:
             print("Can't receive frame (stream end?). Exiting ...")
@@ -231,7 +235,6 @@ def video_sender(client):
         # Send message length first
         header=str(order_num)+'#'+str(time.time())+'#'+client.resolucion+"#"+"36"+"#"
         order_num+=1
-        print("e")
         header_bytes=bytes(header, 'utf-8')
         
         # Then data
