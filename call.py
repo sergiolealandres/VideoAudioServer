@@ -233,6 +233,7 @@ def manage_call(client,connectionSocket):
     client.sender_event = threading.Event()
     client.receiver_event = threading.Event()
     client.call_hold = False
+    client.current_frame = np.array([])
     receiver = threading.Thread(target=video_receiver,args = (client,))
     receiver.start()
 
@@ -321,7 +322,7 @@ def video_receiver(client):
         else:
             own_video = client.current_frame
             if own_video.size > 0:
-                frame_shown = cv2.resize(own_video,(320,240))
+                frame_shown = cv2.resize(own_video,(160,120))
             else:
                 frame_shown = None
 
