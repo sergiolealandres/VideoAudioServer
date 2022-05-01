@@ -186,7 +186,7 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
 
 
 
-def manage_call(client,conexionSocket):
+def manage_call(client,connectionSocket):
     global end_call
     end_call=0
     client.sender_event = threading.Event()
