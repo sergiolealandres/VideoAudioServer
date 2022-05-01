@@ -10,9 +10,11 @@ import base64
 import numpy as np
 from time import sleep
 from conexion_servidor import *
+
 end_call = 0
 current_call = 0
 callSocket = None
+
 
 def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
     global current_call
@@ -85,6 +87,9 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
         client.app.infoBox("Error", "La respuesta no ha sido válida")
 
 def call_waiter(user_Port,client,semaforo):
+    global current_call
+    global end_call
+
 
     waitingSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     waitingSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -101,23 +106,6 @@ def call_waiter(user_Port,client,semaforo):
         return None
 
     waitingSocket.listen(10)
-
-    while client.app.alive:
-        
-        wait_call(user_Port,client,semaforo,waitingSocket)
-        
-    waitingSocket.close()
-        
-
-def wait_call(user_Port,client,semaforo,waitingSocket):
-    global current_call
-    global end_call
-
-    #waitingSocket.bind(('', int(user_Port)))
-   #aqui hay que poner más para el call_busy
-    #print("Servidor preparado para recibir")
-    
-    
 
     while client.app.alive:
         try:
@@ -139,7 +127,7 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
         words = sentence.split(" ")
         print(words)   
         if sentence==b'':
-            break
+            continue
         if sentence[:7] == "CALLING":
             print("prelock wait")
             semaforo.acquire()
@@ -184,39 +172,9 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
                     connectionSocket.close()
         else:
             print("Se ha recibido algo que no es")
-            connectionSocket.close()
-        '''elif sentence[:13] == "CALL_ACCEPTED":
-            print("prelock call")
-            splitted"=sentence.split(" ")
-
-            if splitted[1]!=words[1]:
-                client.app.infoBox("Error", "Los nicks no coinciden")
-                return
-
-            
-            semaforo.acquire()
-            if(current_call == 1):
-                semaforo.release()
-                raise Exception("There is already a call")
-
-
-            current_call = 1
-            semaforo.release()
-
-
-            
-            client.selected_data_port=splitted[2]
-            data= query(splitted[1])
-            nick, ip, control_port, versions=data
-
-            client.selected_ip=ip
-            
-            print("post-lock call")
-            thr = threading.Thread(target=manage_call,args = (client,connectionSocket))
-            thr.start()'''
-            
+            connectionSocket.close() 
         
-    print("SALGO DEL BUCLE")    
+    waitingSocket.close()        
 
 
 
@@ -308,12 +266,12 @@ def video_receiver(client):
             resolucion = resolucion.split("x")
             resolucion = (int(resolucion[0]),int(resolucion[1]))
             real_data=b"#".join(data[4:])
-
+            resolucion_own = (int(resolucion[0]/4),int(resolucion[1]/4))
             frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
-            print("frame ",frame.size)
+            #print("frame ",frame.size)
             own_video = client.current_frame
             if own_video.size > 0:
-                own_video = cv2.resize(own_video,(320,240))
+                own_video = cv2.resize(own_video,resolucion_own)
                 frame_shown = frame
                 frame_shown[0:own_video.shape[0],0:own_video.shape[1]] = own_video
             else:
