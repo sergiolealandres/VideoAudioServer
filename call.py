@@ -219,12 +219,14 @@ def video_sender(client):
     client.enviando = cv2.VideoCapture(client.video_mostrado)
 
     while(end_call == 0):
+        
 
         ret, frame = client.enviando.read()
 
-        if not ret:
-            print("Can't receive frame (stream end?). Exiting ...")
-            break
+        if ret is False:
+                  
+            client.enviando.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            ret, frame = client.enviando.read()
     
         encode_param = [cv2.IMWRITE_JPEG_QUALITY, 50]
         result, encimg = cv2.imencode('.jpg', frame, encode_param)
@@ -236,7 +238,9 @@ def video_sender(client):
         header=str(order_num)+'#'+str(time.time())+'#'+client.resolucion+"#"+"36"+"#"
         order_num+=1
         header_bytes=bytes(header, 'utf-8')
-        
+
+        print(len(data))
+        print(client.selected_ip, client.selected_data_port)
         # Then data
         #senderSocket.sendto(message_size + data,('localhost',8003))
         senderSocket.sendto(header_bytes + data,(client.selected_ip,int(client.selected_data_port)))

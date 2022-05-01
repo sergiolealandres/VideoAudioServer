@@ -321,6 +321,7 @@ class VideoClient(object):
 
 		elif button =="Rechazar":
 			self.accepted_call=-1
+			print("hola")
 
 		elif button == "Colgar":
 			call_end(self)
