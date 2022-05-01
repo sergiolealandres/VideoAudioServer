@@ -42,32 +42,12 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
     print("")
     
 
-    if modifiedSentence[:13] == "CALL_ACCEPTED":
-        print("prelock call")
-        
-        semaforo.acquire()
-        if(current_call == 1):
-            semaforo.release()
-            raise Exception("There is already a call")
-        current_call = 1
-        split=modifiedSentence.split(" ")
-        client.selected_data_port=split[2]
-        data= query(split[1])
-        nick, ip, control_port, versions=data
-
-        client.selected_ip=ip
-        semaforo.release()
-        print("post-lock call")
-        thr = threading.Thread(target=manage_call,args = (client,))
-        thr.start()
-        return 0
-
-    #connectionSocket.close()
-
+    '''
     if modifiedSentence[:9] == "CALL_BUSY":
         return 1
     else:
         return 2
+    '''
 
 def call_waiter(user_Port,client,semaforo):
 
@@ -168,6 +148,27 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
             client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
             end_call = 1
             break
+
+        elif sentence[:13] == "CALL_ACCEPTED":
+            print("prelock call")
+            
+            semaforo.acquire()
+            if(current_call == 1):
+                semaforo.release()
+                raise Exception("There is already a call")
+            current_call = 1
+
+            splitted=sentence.split(" ")
+            client.selected_data_port=splitted[2]
+            data= query(splitted[1])
+            nick, ip, control_port, versions=data
+
+            client.selected_ip=ip
+            semaforo.release()
+            print("post-lock call")
+            thr = threading.Thread(target=manage_call,args = (client,))
+            thr.start()
+            
         else:
             print("Se ha recibido algo que no es")
             
