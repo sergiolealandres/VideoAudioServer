@@ -12,19 +12,30 @@ import heapq
 from conexion_servidor import *
 end_call = 0
 current_call = 0
+connectionSocket = None
+callSocket = None
 
 def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
     global current_call
+    global callSocket
     #global connectionSocket
     serverName = target_IP
     serverPort = target_port
-    connectionSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    connectionSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    connectionSocket.connect((serverName,int(serverPort)))
+
+    semaforo.acquire()
+    if(current_call == 1):
+        semaforo.release()
+        client.app.infoBox("Error", "Finaliza antes tu llamada para realizar otra")
+        return
+    semaforo.release()
+
+    callSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    callSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    callSocket.connect((serverName,int(serverPort)))
     #sentence = "CALLING "+ target_nick + " "+ user_IP + ":"+ str(user_Port)
     sentence = "CALLING "+ client.my_nick + " "+ str(client.my_data_port)
-    connectionSocket.send(sentence.encode())
-    modifiedSentence = connectionSocket.recv(1024)
+    callSocket.send(sentence.encode())
+    modifiedSentence = callSocket.recv(1024)
     modifiedSentence = modifiedSentence.decode('utf-8')
     print("Se ha recibido:")
     print(modifiedSentence)
@@ -131,11 +142,19 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
                     client.selected_data_port=words[2]
                     data=query(words[1])
                     nick, ip, control_port, versions=data
+                    client.selected_control_port=control_port
 
                     client.selected_ip=ip
 
                     mensaje = "CALL_ACCEPTED "+client.my_nick+" "+client.my_data_port
-                    connectionSocket.send(mensaje.encode())
+                    
+
+                    callSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    callSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    callSocket.connect((client.selected_ip,int(client.selected_control_port)))
+
+                    callSocket.send(mensaje.encode())
+
                     thr = threading.Thread(target=manage_call,args = (client,))
                     thr.start()
                 else:
@@ -252,14 +271,14 @@ def video_sender(client):
 
 def call_end(client):
 
-    global connectionSocket
+    global callSocket
     global end_call
     client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
     end_call=1
     time.sleep(0.5)
     message = 'CALL_END ' + client.my_nick
     message = bytes(message, 'utf-8')
-    connectionSocket.send(message)
+    callSocket.send(message)
 
 
 '''
