@@ -8,11 +8,10 @@ import cv2
 import struct
 import base64
 import numpy as np
-import heapq
+from time import sleep
 from conexion_servidor import *
 end_call = 0
 current_call = 0
-connectionSocket = None
 callSocket = None
 
 def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
@@ -31,17 +30,59 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
 
     callSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     callSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    callSocket.connect((serverName,int(serverPort)))
+    callSocket.settimeout(30)
+    try:
+        callSocket.connect((serverName,int(serverPort)))
+    except socket.timeout or ConnectionRefusedError:
+        client.app.infoBox("Error", "El usuario " + target_nick + " no está conectado")
+        return
+
     #sentence = "CALLING "+ target_nick + " "+ user_IP + ":"+ str(user_Port)
     sentence = "CALLING "+ client.my_nick + " "+ str(client.my_data_port)
     callSocket.send(sentence.encode())
+    try:
+        sentence = callSocket.recv(1024)
+        sentence = sentence.decode('utf-8')
+        print(sentence)
+    except socket.timeout:
+        client.app.infoBox("Error", "El usuario " + target_nick + " no ha contestado")
+        return
+    
+    if sentence[:13] == "CALL_ACCEPTED":
+        print("prelock call")
+        splitted=sentence.split(" ")
 
-    '''
-    if modifiedSentence[:9] == "CALL_BUSY":
-        return 1
+        if splitted[1]!=target_nick:
+            client.app.infoBox("Error", "Los nicks no coinciden")
+            return
+
+        
+        semaforo.acquire()
+        if(current_call == 1):
+            semaforo.release()
+            raise Exception("There is already a call")
+
+
+        current_call = 1
+        semaforo.release()
+
+
+        
+        client.selected_data_port=splitted[2]
+        data= query(splitted[1])
+        nick, ip, control_port, versions=data
+
+        client.selected_ip=ip
+        
+        print("post-lock call")
+        thr = threading.Thread(target=manage_call,args = (client,None,))
+        thr.start()
+    elif sentence[:9] == "CALL_BUSY":
+        client.app.infoBox("Error", "El usuario " + target_nick + " está ocupado")
+    elif sentence[:11] == "CALL_DENIED":
+        client.app.infoBox("Error", "El usuario " + target_nick + " ha rechazado la llamada")
     else:
-        return 2
-    '''
+        client.app.infoBox("Error", "La respuesta no ha sido válida")
 
 def call_waiter(user_Port,client,semaforo):
 
@@ -70,13 +111,11 @@ def call_waiter(user_Port,client,semaforo):
 
 def wait_call(user_Port,client,semaforo,waitingSocket):
     global current_call
-    global connectionSocket
     global end_call
-    global callSocket
 
     #waitingSocket.bind(('', int(user_Port)))
    #aqui hay que poner más para el call_busy
-    print("Servidor preparado para recibir")
+    #print("Servidor preparado para recibir")
     
     
 
@@ -84,7 +123,7 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
         try:
             connectionSocket, addr = waitingSocket.accept()
         except socket.timeout:
-            return
+            continue
         print("Empezamos bucle")
         
         print("ITERACION")
@@ -135,23 +174,20 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
 
                     mensaje = "CALL_ACCEPTED "+client.my_nick+" "+client.my_data_port
                     
-
-                    callSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    callSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                    callSocket.connect((client.selected_ip,int(client.selected_control_port)))
-
-                    callSocket.send(mensaje.encode())
-
-                    thr = threading.Thread(target=manage_call,args = (client,))
+                    connectionSocket.send(mensaje.encode())
+                    
+                    thr = threading.Thread(target=manage_call,args = (client,connectionSocket))
                     thr.start()
                 else:
                     mensaje = "CALL_DENIED "+words[1]
                     connectionSocket.send(mensaje.encode())
                     connectionSocket.close()
-
-        elif sentence[:13] == "CALL_ACCEPTED":
+        else:
+            print("Se ha recibido algo que no es")
+            connectionSocket.close()
+        '''elif sentence[:13] == "CALL_ACCEPTED":
             print("prelock call")
-            splitted=sentence.split(" ")
+            splitted"=sentence.split(" ")
 
             if splitted[1]!=words[1]:
                 client.app.infoBox("Error", "Los nicks no coinciden")
@@ -176,18 +212,23 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
             client.selected_ip=ip
             
             print("post-lock call")
-            thr = threading.Thread(target=manage_call,args = (client,))
-            thr.start()
+            thr = threading.Thread(target=manage_call,args = (client,connectionSocket))
+            thr.start()'''
             
-        else:
-            print("Se ha recibido algo que no es")
-            connectionSocket.close()
+        
     print("SALGO DEL BUCLE")    
 
 
 
 def manage_call(client,connectionSocket):
     global end_call
+    global current_call
+    global callSocket
+    print("Entramos en la llamada")
+
+    if connectionSocket is not None:
+        callSocket = connectionSocket
+
     end_call=0
     client.sender_event = threading.Event()
     client.receiver_event = threading.Event()
@@ -203,9 +244,13 @@ def manage_call(client,connectionSocket):
     #CONTROL DE COMUNICACIONES:
     while client.app.alive and end_call == 0:
         try:
-            sentence = connectionSocket.recv(1024)
+            sentence = callSocket.recv(1024)
         except socket.timeout:
             continue
+        sentence = sentence.decode('utf-8')
+        print("Se ha recibido:")
+        print(sentence)
+        print("")
         if sentence[:9] == "CALL_HOLD":
             client.call_hold=True
         elif sentence[:11] == "CALL_RESUME":
@@ -225,7 +270,7 @@ def manage_call(client,connectionSocket):
     current_call = 0
     client.semaforo.release()
 
-    connectionSocket.close()
+    callSocket.close()
     sender.join()
     receiver.join()
     return
@@ -257,13 +302,13 @@ def video_receiver(client):
 
             real_data=b"#".join(data[4:])
 
-            frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
-
-            _, own_video = client.cap.read()
-            frame_shown = np.vstack((frame,own_video))
-
-        else:
             frame_shown = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
+
+            #_, own_video = client.cap.read()
+            #frame_shown = np.vstack((frame,own_video))
+
+        #else:
+        #    frame_shown = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
 
         # Display
         cv2.imshow('frame', frame_shown)
@@ -326,7 +371,7 @@ def call_end(client):
     client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
     end_call=1
     time.sleep(0.5)
-    message = 'CALL_END' + client.my_nick
+    message = 'CALL_END ' + client.my_nick
     message = bytes(message, 'utf-8')
     callSocket.send(message)
     current_call=0
