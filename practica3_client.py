@@ -57,6 +57,7 @@ class VideoClient(object):
 
 
 		self.app.startSubWindow("Panel de la llamada", modal=True)
+		self.app.addImage("Video mostrado", self.imagen_no_camera)
 		self.app.addButtons(["Colgar","Pausar", "Renaudar", "Webcam", "Video"], self.buttonsCallback)
 		#self.app.addLabel("Fps", "0 fps")
 		self.app.addLabelEntry("Enviar Video", 2, 0)

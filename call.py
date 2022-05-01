@@ -1,4 +1,5 @@
 from email import message
+import heapq
 from multiprocessing import Semaphore
 import socket
 import threading
@@ -10,6 +11,7 @@ import base64
 import numpy as np
 from time import sleep
 from conexion_servidor import *
+from PIL import Image, ImageTk
 
 end_call = 0
 current_call = 0
@@ -35,7 +37,11 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
     callSocket.settimeout(30)
     try:
         callSocket.connect((serverName,int(serverPort)))
-    except socket.timeout or ConnectionRefusedError:
+    except socket.timeout:
+        client.app.infoBox("Error", "El usuario " + target_nick + " no está conectado")
+        return
+
+    except ConnectionRefusedError:
         client.app.infoBox("Error", "El usuario " + target_nick + " no está conectado")
         return
 
@@ -126,7 +132,7 @@ def call_waiter(user_Port,client,semaforo):
         print("")
         words = sentence.split(" ")
         print(words)   
-        if sentence==b'':
+        if sentence=='':
             continue
         if sentence[:7] == "CALLING":
             print("prelock wait")
@@ -210,6 +216,8 @@ def manage_call(client,connectionSocket):
         print("Se ha recibido:")
         print(sentence)
         print("")
+        if sentence == '':
+            continue
         if sentence[:9] == "CALL_HOLD":
             client.call_hold=True
         elif sentence[:11] == "CALL_RESUME":
@@ -237,6 +245,7 @@ def manage_call(client,connectionSocket):
 
 
 def video_receiver(client):
+    
     global end_call
     frame = None
     resolucion = None
@@ -244,11 +253,47 @@ def video_receiver(client):
     receiverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     receiverSocket.bind((client.my_ip,int(client.my_data_port)))
     receiverSocket.settimeout(0.1)
+    buffer_circular=[]
+    id_ultimo_paquete_reproducido=0
+    timestamp_ultimo_paquete=0
+    reproduction_fps=24
+    fps_enviados_segundo=0
+    
+
     #receiverSocket.listen()
     #conn, addr = receiverSocket.accept()
-
+    
     data = b'' ### CHANGED
     #payload_size = struct.calcsize("L") ### CHANGED
+
+    #LLenado de dos segundos
+    while end_call == 0 and client.app.alive and len(buffer_circular)<2*reproduction_fps:
+
+        if client.call_hold == 0:
+            # Retrieve message size
+            try:
+                data,_ = receiverSocket.recvfrom(60000)
+            except socket.timeout:
+                print("No llega")
+                continue
+
+            data=data.split(b'#')
+            order_num, timestamp, resolucion, fps=data[0], data[1], data[2], data[3]
+            resolucion = resolucion.decode("utf-8")
+            resolucion = resolucion.split("x")
+            resolucion = (int(resolucion[0]),int(resolucion[1]))
+            real_data=b"#".join(data[4:])
+            resolucion_own = (int(resolucion[0]/4),int(resolucion[1]/4))
+            frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
+            timestamp=float(timestamp.decode('utf-8'))
+            order_num=int(order_num.decode('utf-8'))
+
+            timestamp_ultimo_paquete=timestamp
+
+            heapq.heappush(buffer_circular, (order_num,timestamp, frame))
+
+    control_time=buffer_circular[0][1]
+
 
     while end_call == 0 and client.app.alive:
         
@@ -268,7 +313,33 @@ def video_receiver(client):
             real_data=b"#".join(data[4:])
             resolucion_own = (int(resolucion[0]/4),int(resolucion[1]/4))
             frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
-            #print("frame ",frame.size)
+            timestamp=float(timestamp.decode('utf-8'))
+            order_num=int(order_num.decode('utf-8'))
+            
+            if order_num < id_ultimo_paquete_reproducido:
+                continue
+
+            time_diff = timestamp - timestamp_ultimo_paquete
+
+            reproduction_fps=round(1/((1/reproduction_fps + time_diff)/2))
+
+            heapq.heappush(buffer_circular, (order_num,timestamp, frame))
+
+            first=buffer_circular[0][1]
+
+            diff = time.time() - control_time - 1/reproduction_fps
+
+            if diff < 0:
+                continue
+
+            elif diff >= 0:
+
+                control_time += 1/reproduction_fps
+                frame=buffer_circular[0][2]
+                heapq.heappop(buffer_circular)
+            
+            timestamp_ultimo_paquete = timestamp
+
             own_video = client.current_frame
             if own_video.size > 0:
                 own_video = cv2.resize(own_video,resolucion_own)
@@ -286,8 +357,10 @@ def video_receiver(client):
 
         # Display
         if frame_shown is not None:
-            cv2.imshow('frame', frame_shown)
-            cv2.waitKey(1)
+            cv2_im = cv2.cvtColor(frame_shown, cv2.COLOR_BGR2RGB)
+            img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
+            client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage')
+
     cv2.destroyAllWindows()
     print("termino de recibir video")
     receiverSocket.close()
@@ -309,16 +382,15 @@ def video_sender(client):
             continue
 
         ret, frame = client.enviando.read()
-        client.current_frame = frame
-
         
-
         if ret is False:
                   
             client.enviando.set(cv2.CAP_PROP_POS_FRAMES, 0)
             ret, frame = client.enviando.read()
         if frame is None:
             continue
+
+        client.current_frame = frame
     
         encode_param = [cv2.IMWRITE_JPEG_QUALITY, 50]
         #print(frame, encode_param)
@@ -328,6 +400,8 @@ def video_sender(client):
         #data = pickle.dumps(frame)
 
         # Send message length first
+
+
         header=str(order_num)+'#'+str(time.time())+'#'+client.resolucion+"#"+"36"+"#"
         order_num+=1
         header_bytes=bytes(header, 'utf-8')
