@@ -35,12 +35,6 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
     #sentence = "CALLING "+ target_nick + " "+ user_IP + ":"+ str(user_Port)
     sentence = "CALLING "+ client.my_nick + " "+ str(client.my_data_port)
     callSocket.send(sentence.encode())
-    modifiedSentence = callSocket.recv(1024)
-    modifiedSentence = modifiedSentence.decode('utf-8')
-    print("Se ha recibido:")
-    print(modifiedSentence)
-    print("")
-    
 
     '''
     if modifiedSentence[:9] == "CALL_BUSY":
@@ -83,10 +77,10 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
    #aqui hay que poner más para el call_busy
     print("Servidor preparado para recibir")
     
-    connectionSocket, addr = waitingSocket.accept()
+    
     while client.app.alive:
         print("Empezamos bucle")
-        
+        connectionSocket, addr = waitingSocket.accept()
         print("ITERACION")
         sentence = connectionSocket.recv(1024)
         sentence = sentence.decode('utf-8')
@@ -95,7 +89,8 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
         print("")
         words = sentence.split(" ")
         print(words)   
-            
+        if sentence==b'':
+            break
         if sentence[:7] == "CALLING":
             print("prelock wait")
             semaforo.acquire()
@@ -152,11 +147,21 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
         elif sentence[:13] == "CALL_ACCEPTED":
             print("prelock call")
             
+
+            if splitted[1]!=words[1]:
+                client.app.infoBox("Error", "Los nicks no coinciden")
+                return
+
+            
             semaforo.acquire()
             if(current_call == 1):
                 semaforo.release()
                 raise Exception("There is already a call")
+
+
             current_call = 1
+            semaforo.release()
+
 
             splitted=sentence.split(" ")
             client.selected_data_port=splitted[2]
@@ -164,7 +169,7 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
             nick, ip, control_port, versions=data
 
             client.selected_ip=ip
-            semaforo.release()
+            
             print("post-lock call")
             thr = threading.Thread(target=manage_call,args = (client,))
             thr.start()
