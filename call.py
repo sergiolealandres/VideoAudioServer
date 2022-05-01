@@ -279,6 +279,8 @@ def manage_call(client,connectionSocket):
 
 def video_receiver(client):
     global end_call
+    frame = None
+    resolucion = None
     receiverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     receiverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     receiverSocket.bind((client.my_ip,int(client.my_data_port)))
@@ -290,29 +292,43 @@ def video_receiver(client):
     #payload_size = struct.calcsize("L") ### CHANGED
 
     while end_call == 0 and client.app.alive:
+        
         if client.call_hold == 0:
             # Retrieve message size
             try:
                 data,_ = receiverSocket.recvfrom(60000)
             except socket.timeout:
+                print("No llega")
                 continue
 
             data=data.split(b'#')
             order_num, timestamp, resolucion, fps=data[0], data[1], data[2], data[3]
-
+            resolucion = resolucion.decode("utf-8")
+            resolucion = resolucion.split("x")
+            resolucion = (int(resolucion[0]),int(resolucion[1]))
             real_data=b"#".join(data[4:])
 
-            frame_shown = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
+            frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
+            print("frame ",frame.size)
+            own_video = client.current_frame
+            if own_video.size > 0:
+                own_video = cv2.resize(own_video,(320,240))
+                frame_shown = frame
+                frame_shown[0:own_video.shape[0],0:own_video.shape[1]] = own_video
+            else:
+                frame_shown = frame
 
-            #_, own_video = client.cap.read()
-            #frame_shown = np.vstack((frame,own_video))
-
-        #else:
-        #    frame_shown = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
+        else:
+            own_video = client.current_frame
+            if own_video.size > 0:
+                frame_shown = cv2.resize(own_video,(320,240))
+            else:
+                frame_shown = None
 
         # Display
-        cv2.imshow('frame', frame_shown)
-        cv2.waitKey(1)
+        if frame_shown is not None:
+            cv2.imshow('frame', frame_shown)
+            cv2.waitKey(1)
     cv2.destroyAllWindows()
     print("termino de recibir video")
     receiverSocket.close()
@@ -334,6 +350,7 @@ def video_sender(client):
             continue
 
         ret, frame = client.enviando.read()
+        client.current_frame = frame
 
         
 
