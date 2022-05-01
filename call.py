@@ -47,7 +47,7 @@ def call_waiter(user_Port,client,semaforo):
 
     waitingSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     waitingSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    
+    waitingSocket.settimeout(1)
     try:
         waitingSocket.bind((client.my_ip, int(client.my_control_port)))
     except OSError:
@@ -65,24 +65,33 @@ def call_waiter(user_Port,client,semaforo):
         
         wait_call(user_Port,client,semaforo,waitingSocket)
         
-        
+    waitingSocket.close()
         
 
 def wait_call(user_Port,client,semaforo,waitingSocket):
     global current_call
     global connectionSocket
     global end_call
+    global callSocket
 
     #waitingSocket.bind(('', int(user_Port)))
    #aqui hay que poner más para el call_busy
     print("Servidor preparado para recibir")
     
-    
+    try:
+        connectionSocket, addr = waitingSocket.accept()
+    except socket.timeout:
+        return
+
     while client.app.alive:
         print("Empezamos bucle")
-        connectionSocket, addr = waitingSocket.accept()
+        
         print("ITERACION")
-        sentence = connectionSocket.recv(1024)
+        print("SALGO DEL BUCLE") 
+        try:
+            sentence = connectionSocket.recv(1024)
+        except socket.timeout:
+            continue
         sentence = sentence.decode('utf-8')
         print("Se ha recibido:")
         print(sentence)
@@ -111,7 +120,7 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
                         semaforo.release()
                         connectionSocket.send("CALL_BUSY".encode())
                         continue
-                
+                    client.accepted_call=0
                     current_call = 1
                     semaforo.release()
                     client.selected_data_port=words[2]
@@ -136,17 +145,19 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
                     mensaje = "CALL_DENIED "+words[1]
                     connectionSocket.send(mensaje.encode())
         elif sentence[:9] == "CALL_HOLD":
-            client.notify("CALL_HOLD")
+            client.stop_sending_video=True
         elif sentence[:11] == "CALL_RESUME":
-            client.notify("CALL_RESUME")
+            client.stop_sending_video=False
         elif sentence[:8] == "CALL_END":
+            print("RECIBO CALL END")
             client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
             end_call = 1
+            current_call=0
             break
 
         elif sentence[:13] == "CALL_ACCEPTED":
             print("prelock call")
-            
+            splitted=sentence.split(" ")
 
             if splitted[1]!=words[1]:
                 client.app.infoBox("Error", "Los nicks no coinciden")
@@ -163,7 +174,7 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
             semaforo.release()
 
 
-            splitted=sentence.split(" ")
+            
             client.selected_data_port=splitted[2]
             data= query(splitted[1])
             nick, ip, control_port, versions=data
@@ -178,15 +189,15 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
             print("Se ha recibido algo que no es")
             
             break
-
+    print("SALGO DEL BUCLE")        
     connectionSocket.close()
 
 
 
 def manage_call(client):
-    global hold_call
     global end_call
-
+    end_call=0
+    client.stop_sending_video = False
     receiver = threading.Thread(target=video_receiver,args = (client,))
     receiver.start()
 
@@ -201,6 +212,7 @@ def video_receiver(client):
     receiverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     receiverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     receiverSocket.bind((client.my_ip,int(client.my_data_port)))
+    receiverSocket.settimeout(0.1)
     #receiverSocket.listen()
     #conn, addr = receiverSocket.accept()
 
@@ -210,7 +222,13 @@ def video_receiver(client):
     while end_call == 0 and client.app.alive:
 
         # Retrieve message size
-        data,_ = receiverSocket.recvfrom(60000)
+        try:
+            data,_ = receiverSocket.recvfrom(60000)
+        except socket.timeout:
+            continue
+
+        if client.stop_sending_video:
+            continue
 
         data=data.split(b'#')
         order_num, timestamp, resolucion, fps=data[0], data[1], data[2], data[3]
@@ -235,7 +253,9 @@ def video_receiver(client):
         # Display
         cv2.imshow('frame', frame)
         cv2.waitKey(1)
-
+    cv2.destroyAllWindows()
+    print("termino de recibir video")
+    receiverSocket.close()
 
 def video_sender(client):
     global end_call
@@ -248,16 +268,22 @@ def video_sender(client):
     client.enviando = cv2.VideoCapture(client.video_mostrado)
 
     while(end_call == 0):
-        
+        if client.stop_sending_video:
+            continue
 
         ret, frame = client.enviando.read()
+
+        
 
         if ret is False:
                   
             client.enviando.set(cv2.CAP_PROP_POS_FRAMES, 0)
             ret, frame = client.enviando.read()
+        if frame is None:
+            continue
     
         encode_param = [cv2.IMWRITE_JPEG_QUALITY, 50]
+        #print(frame, encode_param)
         result, encimg = cv2.imencode('.jpg', frame, encode_param)
         # Serialize frame
         data = encimg.tobytes()
@@ -273,16 +299,34 @@ def video_sender(client):
         # Then data
         #senderSocket.sendto(message_size + data,('localhost',8003))
         senderSocket.sendto(header_bytes + data,(client.selected_ip,int(client.selected_data_port)))
+    senderSocket.close()
 
 
 def call_end(client):
-
+    global current_call
     global callSocket
     global end_call
     client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
     end_call=1
     time.sleep(0.5)
-    message = 'CALL_END ' + client.my_nick
+    message = 'CALL_END' + client.my_nick
+    message = bytes(message, 'utf-8')
+    callSocket.send(message)
+    current_call=0
+    print("lo mando")
+
+def parar_llamada(client):
+
+    global callSocket
+    message = 'CALL_HOLD ' + client.my_nick
+    message = bytes(message, 'utf-8')
+    callSocket.send(message)
+
+    
+def continuar_llamada(client):
+
+    global callSocket
+    message = 'CALL_RESUME ' + client.my_nick
     message = bytes(message, 'utf-8')
     callSocket.send(message)
 

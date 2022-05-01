@@ -25,6 +25,7 @@ class VideoClient(object):
 	video_para_mostrar="imgs/video_por_defecto.gif"
 	video_mostrado=0
 	enviando=None
+	stop_sending_video=False
 
 	def __init__(self, window_size):
 		
@@ -279,6 +280,16 @@ class VideoClient(object):
 			self.app.setEntry("Puerto Control\t\t", "8080")
 			self.app.setEntry("Puerto Datos\t\t", "4444")
 			self.app.setEntryFocus("Nick\t\t")
+
+		elif button =="Pausar":
+			if self.stop_sending_video==False:
+				self.stop_sending_video=True
+				parar_llamada(self)
+
+		elif button =='Renaudar':
+			if self.stop_sending_video==True:
+				continuar_llamada(self)
+				self.stop_sending_video=False
  
 		elif button=='Salir':
 			quit()
@@ -291,7 +302,7 @@ class VideoClient(object):
 				return
 
 			self.video_mostrado=0
-
+			self.enviando =cv2.VideoCapture(0)
 
 
 		elif button == 'Video':
