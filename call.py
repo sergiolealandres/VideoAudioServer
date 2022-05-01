@@ -8,14 +8,14 @@ import cv2
 import struct
 import base64
 import numpy as np
-from practica3_client import *
 import heapq
+from conexion_servidor import *
 end_call = 0
 current_call = 0
 
 def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
     global current_call
-    global connectionSocket
+    #global connectionSocket
     serverName = target_IP
     serverPort = target_port
     connectionSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -41,13 +41,13 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
         current_call = 1
         split=modifiedSentence.split(" ")
         client.selected_data_port=split[2]
-        data=query(split[1])
+        data= query(split[1])
         nick, ip, control_port, versions=data
 
         client.selected_ip=ip
         semaforo.release()
         print("post-lock call")
-        thr = threading.Thread(target=manage_call,args = (connectionSocket,client,))
+        thr = threading.Thread(target=manage_call,args = (client,))
         thr.start()
         return 0
 
@@ -62,7 +62,7 @@ def call_waiter(user_Port,client,semaforo):
 
     waitingSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     waitingSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
+    
     try:
         waitingSocket.bind((client.my_ip, int(client.my_control_port)))
     except OSError:
@@ -74,7 +74,9 @@ def call_waiter(user_Port,client,semaforo):
 
         return None
 
-    while True:
+    waitingSocket.listen(10)
+
+    while client.app.alive:
         
         wait_call(user_Port,client,semaforo,waitingSocket)
         
@@ -84,9 +86,10 @@ def call_waiter(user_Port,client,semaforo):
 def wait_call(user_Port,client,semaforo,waitingSocket):
     global current_call
     global connectionSocket
+    global end_call
 
     #waitingSocket.bind(('', int(user_Port)))
-    waitingSocket.listen(2)#aqui hay que poner más para el call_busy
+   #aqui hay que poner más para el call_busy
     print("Servidor preparado para recibir")
     
     connectionSocket, addr = waitingSocket.accept()
@@ -133,7 +136,7 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
 
                     mensaje = "CALL_ACCEPTED "+client.my_nick+" "+client.my_data_port
                     connectionSocket.send(mensaje.encode())
-                    thr = threading.Thread(target=manage_call,args = (connectionSocket,client,))
+                    thr = threading.Thread(target=manage_call,args = (client,))
                     thr.start()
                 else:
                     mensaje = "CALL_DENIED "+words[1]
@@ -143,7 +146,8 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
         elif sentence[:11] == "CALL_RESUME":
             client.notify("CALL_RESUME")
         elif sentence[:8] == "CALL_END":
-            call_end(client)
+            client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
+            end_call = 1
             break
         else:
             print("Se ha recibido algo que no es")
@@ -154,7 +158,7 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
 
 
 
-def manage_call(callSocket,client):
+def manage_call(client):
     global hold_call
     global end_call
 
@@ -239,8 +243,8 @@ def video_sender(client):
         order_num+=1
         header_bytes=bytes(header, 'utf-8')
 
-        print(len(data))
-        print(client.selected_ip, client.selected_data_port)
+        #print(len(data))
+        #print(client.selected_ip, client.selected_data_port)
         # Then data
         #senderSocket.sendto(message_size + data,('localhost',8003))
         senderSocket.sendto(header_bytes + data,(client.selected_ip,int(client.selected_data_port)))
