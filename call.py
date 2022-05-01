@@ -78,12 +78,13 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
    #aqui hay que poner más para el call_busy
     print("Servidor preparado para recibir")
     
-    try:
-        connectionSocket, addr = waitingSocket.accept()
-    except socket.timeout:
-        return
+    
 
     while client.app.alive:
+        try:
+            connectionSocket, addr = waitingSocket.accept()
+        except socket.timeout:
+            return
         print("Empezamos bucle")
         
         print("ITERACION")
@@ -108,6 +109,7 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
             print("postlock wait", current_call_value)
             if current_call_value == 1:
                 connectionSocket.send("CALL_BUSY".encode())
+                connectionSocket.close()
                 #if client.ask_call(words[1]):
             else:
                 client.app.setLabel("Nick entrante", words[1] + " te esta llamando...")
@@ -119,6 +121,7 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
                     if(current_call == 1):
                         semaforo.release()
                         connectionSocket.send("CALL_BUSY".encode())
+                        connectionSocket.close()
                         continue
                     client.accepted_call=0
                     current_call = 1
@@ -144,16 +147,7 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
                 else:
                     mensaje = "CALL_DENIED "+words[1]
                     connectionSocket.send(mensaje.encode())
-        elif sentence[:9] == "CALL_HOLD":
-            client.stop_sending_video=True
-        elif sentence[:11] == "CALL_RESUME":
-            client.stop_sending_video=False
-        elif sentence[:8] == "CALL_END":
-            print("RECIBO CALL END")
-            client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
-            end_call = 1
-            current_call=0
-            break
+                    connectionSocket.close()
 
         elif sentence[:13] == "CALL_ACCEPTED":
             print("prelock call")
@@ -187,17 +181,17 @@ def wait_call(user_Port,client,semaforo,waitingSocket):
             
         else:
             print("Se ha recibido algo que no es")
-            
-            break
-    print("SALGO DEL BUCLE")        
-    connectionSocket.close()
+            connectionSocket.close()
+    print("SALGO DEL BUCLE")    
 
 
 
-def manage_call(client):
+def manage_call(client,conexionSocket):
     global end_call
     end_call=0
-    client.stop_sending_video = False
+    client.sender_event = threading.Event()
+    client.receiver_event = threading.Event()
+    client.call_hold = False
     receiver = threading.Thread(target=video_receiver,args = (client,))
     receiver.start()
 
@@ -205,6 +199,37 @@ def manage_call(client):
     sender.start()
 
     client.app.showSubWindow("Panel de la llamada")
+
+    #CONTROL DE COMUNICACIONES:
+    while client.app.alive and end_call == 0:
+        try:
+            sentence = connectionSocket.recv(1024)
+        except socket.timeout:
+            continue
+        if sentence[:9] == "CALL_HOLD":
+            client.call_hold=True
+        elif sentence[:11] == "CALL_RESUME":
+            client.call_hold=False
+            client.sender_event.set()
+        elif sentence[:8] == "CALL_END":
+            print("RECIBO CALL END")
+            client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
+            end_call = 1
+            client.sender_event.set()
+            
+        else:
+            print("Se ha recibido algo que no es")
+            
+    
+    client.semaforo.acquire()
+    current_call = 0
+    client.semaforo.release()
+
+    connectionSocket.close()
+    sender.join()
+    receiver.join()
+    return
+
 
 
 def video_receiver(client):
@@ -220,38 +245,28 @@ def video_receiver(client):
     #payload_size = struct.calcsize("L") ### CHANGED
 
     while end_call == 0 and client.app.alive:
+        if client.call_hold == 0:
+            # Retrieve message size
+            try:
+                data,_ = receiverSocket.recvfrom(60000)
+            except socket.timeout:
+                continue
 
-        # Retrieve message size
-        try:
-            data,_ = receiverSocket.recvfrom(60000)
-        except socket.timeout:
-            continue
+            data=data.split(b'#')
+            order_num, timestamp, resolucion, fps=data[0], data[1], data[2], data[3]
 
-        if client.stop_sending_video:
-            continue
+            real_data=b"#".join(data[4:])
 
-        data=data.split(b'#')
-        order_num, timestamp, resolucion, fps=data[0], data[1], data[2], data[3]
+            frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
 
-        real_data=b"#".join(data[4:])
+            _, own_video = client.cap.read()
+            frame_shown = np.vstack((frame,own_video))
 
-        #packed_msg_size = data[:payload_size]
-        
-        #msg_size = struct.unpack("L", packed_msg_size)[0] ### CHANGED
-
-        # Retrieve all data based on message size
-       
-
-        #frame_data = data[:msg_size]
-        #data = data[msg_size:]
-        frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
-        # Extract frame
-        #frame_ = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-        #frame__= ImageTk.PhotoImage(Image.fromarray(frame_))
+        else:
+            frame_shown = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
 
         # Display
-        cv2.imshow('frame', frame)
+        cv2.imshow('frame', frame_shown)
         cv2.waitKey(1)
     cv2.destroyAllWindows()
     print("termino de recibir video")
@@ -268,7 +283,9 @@ def video_sender(client):
     client.enviando = cv2.VideoCapture(client.video_mostrado)
 
     while(end_call == 0):
-        if client.stop_sending_video:
+        if client.call_hold:
+            client.sender_event.wait(timeout = 2)
+            client.sender_event.clear()
             continue
 
         ret, frame = client.enviando.read()
