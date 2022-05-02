@@ -522,6 +522,7 @@ def video_sender(client):
 
         senderSocket.sendto(header_bytes + data,(client.selected_ip,int(client.selected_data_port)))
     senderSocket.close()
+    client.enviando.release()
 
 
 def call_end(client):
