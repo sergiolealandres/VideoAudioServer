@@ -288,6 +288,7 @@ def manage_call(client,connectionSocket):
     callSocket.close()
     sender.join()
     receiver.join()
+    resetear_valores(client)
 
     if(client.camera_conected == 1):
         client.cap = cv2.VideoCapture(0)
@@ -314,11 +315,9 @@ def video_receiver(client):
     fps_enviados_segundo=0
     
 
-    #receiverSocket.listen()
-    #conn, addr = receiverSocket.accept()
     
     data = b'' ### CHANGED
-    #payload_size = struct.calcsize("L") ### CHANGED
+   
 
     #LLenado de dos segundos
     def llenar_buffer(buffer_circular,reproduction_fps):
@@ -413,6 +412,7 @@ def video_receiver(client):
 
                 # Display
                 if frame_shown is not None:
+                    frame_shown=cv2.resize(frame_shown, client.resolucion_tuple)
                     cv2_im = cv2.cvtColor(frame_shown, cv2.COLOR_BGR2RGB)
                     img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                     client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage') 
@@ -436,6 +436,7 @@ def video_receiver(client):
 
                         # Display
                         if frame_shown is not None:
+                            frame_shown=cv2.resize(frame_shown, client.resolucion_tuple)
                             cv2_im = cv2.cvtColor(frame_shown, cv2.COLOR_BGR2RGB)
                             img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                             client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage')
@@ -522,6 +523,7 @@ def video_sender(client):
 
         senderSocket.sendto(header_bytes + data,(client.selected_ip,int(client.selected_data_port)))
     
+    client.enviando.release()
     senderSocket.close()
 
 
@@ -535,10 +537,12 @@ def call_end(client):
     message = bytes(message, 'utf-8')
     callSocket.send(message)
     end_call=1
+    
     client.sender_event.set()
     client.receiver_event.set()
     
-    print("lo mando")
+    
+    
 
 def parar_llamada(client):
 
@@ -559,6 +563,10 @@ def continuar_llamada(client):
     client.sender_event.set()
     client.receiver_event.set()
 
+def resetear_valores(client):
+
+    client.selected_nick, client.selected_ip, client.selected_control_port, \
+        client.selected_data_port,client.selected_version=None,None, None,None,None
 
 '''
 semaforo = threading.Lock()

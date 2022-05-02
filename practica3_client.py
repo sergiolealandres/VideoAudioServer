@@ -41,7 +41,7 @@ class VideoClient(object):
 		# Preparación del interfaz
 		self.app.addLabel("title", "Cliente Multimedia P2P - Redes2 ")
 		self.app.addImage("video", "imgs/nocamera.gif")
-
+		self.app.setImageSize("video", 640, 480)
 		# Registramos la función de captura de video
 		# Esta misma función también sirve para enviar un vídeo
 		self.cap = cv2.VideoCapture(self.imagen_no_camera)
@@ -143,7 +143,7 @@ class VideoClient(object):
 		if frame is None and ret==False:
 			
 			return
-		frame = cv2.resize(frame, (500,300))
+		frame = cv2.resize(frame, (640,480))
 		cv2_im = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
 		img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))		    
 
@@ -229,6 +229,11 @@ class VideoClient(object):
 
 		elif button =="Search":
 			nick = self.app.getEntry("User\t\t")
+
+			if len(nick)==0:
+
+				self.app.infoBox("Error", "Debes de introducir algín nick")
+				return
 
 			data=query(nick)
 			if data is None:
