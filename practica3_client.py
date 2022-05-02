@@ -26,6 +26,7 @@ class VideoClient(object):
 	video_mostrado=0
 	enviando=None
 	stop_sending_video=False
+	event_call=threading.Event()
 
 	def __init__(self, window_size):
 		
@@ -63,15 +64,32 @@ class VideoClient(object):
 		self.app.addLabelEntry("Enviar Video", 2, 0)
 		self.app.setEntry("Enviar Video", self.video_para_mostrar)
 		self.app.stopSubWindow()
-
+		'''
+		self.app.startSubWindow("Panel de registro", modal=True)
+		self.app.addLabelEntry("Nick\t\t", 0, 0)
+		self.app.addLabelSecretEntry("Contraseña\t", 1, 0)
+		self.app.addLabelEntry("IP\t\t", 2, 0)
+		self.app.addButton("IP VPN", self.buttonsCallback, 2,1)
+		self.app.addLabelEntry("Puerto Control\t\t", 3, 0)
+		self.app.addLabelEntry("Puerto Datos\t\t", 4, 0)
+		self.app.addLabelEntry("Protocolo\t\t", 5, 0)
+		self.app.addButtons(["Registrarse", "Clean"], self.buttonsCallback, 6, 0, 2)
+		self.app.setEntryFocus("Nick\t\t")
+		self.app.setEntry("IP\t\t", self.local_IP)
+		self.app.setEntry("Protocolo\t\t", "V0")
+		self.app.setEntry("Puerto Control\t\t", "8080")
+		self.app.setEntry("Puerto Datos\t\t", "4444")
+		'''
 		with self.app.tabbedFrame("Tabs"):
 		# Tab para registrarse.
+			
 			with self.app.tab("Registrarse"):
 				self.app.setFg("DarkBlue")
 				self.app.setBg("LightSkyBlue")
 				self.app.addLabelEntry("Nick\t\t", 0, 0)
 				self.app.addLabelSecretEntry("Contraseña\t", 1, 0)
 				self.app.addLabelEntry("IP\t\t", 2, 0)
+				self.app.addButton("IP VPN", self.buttonsCallback, 2,1)
 				self.app.addLabelEntry("Puerto Control\t\t", 3, 0)
 				self.app.addLabelEntry("Puerto Datos\t\t", 4, 0)
 				self.app.addLabelEntry("Protocolo\t\t", 5, 0)
@@ -82,6 +100,7 @@ class VideoClient(object):
 				self.app.setEntry("Protocolo\t\t", "V0")
 				self.app.setEntry("Puerto Control\t\t", "8080")
 				self.app.setEntry("Puerto Datos\t\t", "4444")
+			
 
 			with self.app.tab("SEARCH USER"):
 				self.app.setFg("DarkBlue")
@@ -147,11 +166,6 @@ class VideoClient(object):
 			self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640) 
 			self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480) 
 
-	def has_call_been_accepted(self):
-		while self.accepted_call==0:
-			continue
-
-		return self.accepted_call
 
 				
 	# Función que gestiona los callbacks de los botones
@@ -330,10 +344,11 @@ class VideoClient(object):
 
 		elif button =="Aceptar":
 			self.accepted_call=1
+			self.event_call.set()
 
 		elif button =="Rechazar":
 			self.accepted_call=-1
-			print("hola")
+			self.event_call.set()
 
 		elif button == "Colgar":
 			call_end(self)

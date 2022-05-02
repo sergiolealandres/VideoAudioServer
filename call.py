@@ -36,7 +36,7 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
 
     callSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     callSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    callSocket.settimeout(30)
+    callSocket.settimeout(5)
     try:
         callSocket.connect((serverName,int(serverPort)))
     except socket.timeout:
@@ -50,6 +50,7 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
     #sentence = "CALLING "+ target_nick + " "+ user_IP + ":"+ str(user_Port)
     sentence = "CALLING "+ client.my_nick + " "+ str(client.my_data_port)
     callSocket.send(sentence.encode())
+    callSocket.settimeout(20)
     try:
         sentence = callSocket.recv(1024)
         sentence = sentence.decode('utf-8')
@@ -153,10 +154,16 @@ def call_waiter(user_Port,client,semaforo):
                 #if client.ask_call(words[1]):
             else:
                 client.app.setLabel("Nick entrante", words[1] + " te esta llamando...")
+
+                client.accepted_call=0
+                client.event_call.clear()
+
+
                 client.app.showSubWindow("LLamada entrante")
-                call_accepted=client.has_call_been_accepted()
+                client.event_call.wait(timeout=10)
                 client.app.hideSubWindow("LLamada entrante", useStopFunction=False)
-                if call_accepted==1:
+
+                if client.accepted_call==1:
                     semaforo.acquire()
                     if(current_call == 1):
                         semaforo.release()
@@ -397,7 +404,7 @@ def video_receiver(client):
 
         
 
-    cv2.destroyAllWindows()
+    client.app.setImageData("Video mostrado", client.imagen_no_camera, fmt = 'PhotoImage')
     print("termino de recibir video")
     receiverSocket.close()
 
