@@ -15,7 +15,7 @@ from conexion_servidor import *
 from PIL import Image, ImageTk
 from audio import *
 
-end_call = 0
+
 current_call = 0
 callSocket = None
 MIN_FPS = 8
@@ -104,7 +104,7 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
 
 def call_waiter(user_Port,client,semaforo):
     global current_call
-    global end_call
+    
 
 
     waitingSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -232,7 +232,7 @@ def call_waiter(user_Port,client,semaforo):
 
 
 def manage_call(client,connectionSocket):
-    global end_call
+    
     global current_call
     global callSocket
     print("Entramos en la llamada")
@@ -240,9 +240,12 @@ def manage_call(client,connectionSocket):
     if connectionSocket is not None:
         callSocket = connectionSocket
 
-    end_call=0
+    client.end_call= 0
     client.sender_event = threading.Event()
     client.receiver_event = threading.Event()
+    client.audio_sender_event = threading.Event()
+    client.audio_receiver_event = threading.Event()
+
     client.call_hold = False
     client.current_frame = np.array([])
     client.cap.release()
@@ -261,7 +264,7 @@ def manage_call(client,connectionSocket):
     client.app.showSubWindow("Panel de la llamada")
 
     #CONTROL DE COMUNICACIONES:
-    while client.app.alive and end_call == 0:
+    while client.app.alive and client.end_call == 0:
         try:
             sentence = callSocket.recv(1024)
         except socket.timeout:
@@ -279,12 +282,17 @@ def manage_call(client,connectionSocket):
             client.call_hold=False
             client.sender_event.set()
             client.receiver_event.set()
+            client.audio_sender_event.set()
+            client.audio_receiver_event.set()
         elif sentence[:8] == "CALL_END":
             print("RECIBO CALL END")
             client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
-            end_call = 1
+            client.end_call = 1
             client.sender_event.set()
             client.receiver_event.set()
+            client.audio_sender_event.set()
+            client.audio_receiver_event.set()
+            
             
         else:
             print("Se ha recibido algo que no es")
@@ -309,7 +317,7 @@ def manage_call(client,connectionSocket):
 
 def video_receiver(client):
     
-    global end_call
+    
     frame = None
     resolucion = None
     receiverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -332,7 +340,7 @@ def video_receiver(client):
     #LLenado de dos segundos
     def llenar_buffer(buffer_circular,reproduction_fps):
         tiempo_ultimo_paquete = 0
-        while end_call == 0 and client.app.alive and len(buffer_circular)<2*reproduction_fps:
+        while client.end_call == 0 and client.app.alive and len(buffer_circular)<2*reproduction_fps:
 
             if client.call_hold == 0:
                 # Retrieve message size
@@ -369,7 +377,7 @@ def video_receiver(client):
         control_time=buffer_circular[0][1]
 
 
-    while end_call == 0 and client.app.alive:
+    while client.end_call == 0 and client.app.alive:
         if client.call_hold is False:
             # Retrieve message size
             try:
@@ -427,10 +435,10 @@ def video_receiver(client):
                     img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                     client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage') 
 
-                if diff >2:
+                if diff >0.5:
 
             
-                    while len(buffer_circular) > 2*reproduction_fps:
+                    while len(buffer_circular) > 0.5*reproduction_fps:
 
                         frame=buffer_circular[0][2]
                         heapq.heappop(buffer_circular)
@@ -458,7 +466,7 @@ def video_receiver(client):
 
         else:
             #clean the buffer
-            while end_call == 0 and client.app.alive and client.call_hold is True:
+            while client.end_call == 0 and client.app.alive and client.call_hold is True:
                 try:
                     _,_ = receiverSocket.recvfrom(60000)
                 except socket.timeout:
@@ -467,10 +475,10 @@ def video_receiver(client):
             
             print("CAAAAAAAAAAAAAAAAAAAALlllllllllllll HHHHHHHHHHHHHHHHOOOOOOOOOOOOOOOOOOLLLLLLLLLLLLLLLD")
             #wait until resume
-            while end_call == 0 and client.app.alive and client.call_hold is True:
+            while client.end_call == 0 and client.app.alive and client.call_hold is True:
                 client.receiver_event.wait(timeout=2)
                 client.receiver_event.clear()
-                if(end_call == 0 and client.app.alive and client.call_hold is False):
+                if(client.end_call == 0 and client.app.alive and client.call_hold is False):
                     buffer_circular = []
                     reproduction_fps,tiempo_ultimo_paquete = llenar_buffer(buffer_circular,reproduction_fps)
                     print("buffer",len(buffer_circular))
@@ -484,7 +492,7 @@ def video_receiver(client):
     receiverSocket.close()
 
 def video_sender(client):
-    global end_call
+    
     fps_sending = 32
     senderSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     senderSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -493,7 +501,7 @@ def video_sender(client):
 
     client.enviando = cv2.VideoCapture(client.video_mostrado)
 
-    while(end_call == 0):
+    while(client.end_call == 0):
         if client.call_hold:
             client.sender_event.wait(timeout = 2)
             client.sender_event.clear()
@@ -541,13 +549,15 @@ def video_sender(client):
 def call_end(client):
     global current_call
     global callSocket
-    global end_call
+    
     client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
     
     message = 'CALL_END ' + client.my_nick
     message = bytes(message, 'utf-8')
     callSocket.send(message)
-    end_call=1
+    client.end_call=1
+    client.sender_event.set()
+    client.receiver_event.set()
     client.sender_event.set()
     client.receiver_event.set()
     
@@ -569,6 +579,8 @@ def continuar_llamada(client):
     message = bytes(message, 'utf-8')
     callSocket.send(message)
     client.call_hold = False
+    client.sender_event.set()
+    client.receiver_event.set()
     client.sender_event.set()
     client.receiver_event.set()
 
