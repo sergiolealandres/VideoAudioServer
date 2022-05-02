@@ -1,4 +1,5 @@
 from email import message
+import fractions
 import heapq
 from multiprocessing import Semaphore
 import socket
@@ -413,6 +414,7 @@ def video_receiver(client):
 
                 # Display
                 if frame_shown is not None:
+                    cv2.resize(frame_shown,client.resolucion_tuple)
                     cv2_im = cv2.cvtColor(frame_shown, cv2.COLOR_BGR2RGB)
                     img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                     client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage') 
@@ -436,6 +438,8 @@ def video_receiver(client):
 
                         # Display
                         if frame_shown is not None:
+
+                            cv2.resize(frame_shown,client.resolucion_tuple)
                             cv2_im = cv2.cvtColor(frame_shown, cv2.COLOR_BGR2RGB)
                             img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                             client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage')
@@ -487,6 +491,7 @@ def video_sender(client):
             client.sender_event.clear()
             continue
         tiempo_inicio = time.time()
+        client.setImageResolution(client.resolucion_sender)
         ret, frame = client.enviando.read()
         
         if ret is False:
@@ -508,7 +513,7 @@ def video_sender(client):
         # Send message length first
 
 
-        header=str(order_num)+'#'+str(time.time())+'#'+client.resolucion+"#"+"36"+"#"
+        header=str(order_num)+'#'+str(time.time())+'#'+client.resolucion_sender_value+"#"+str(fps_sending)+"#"
         order_num+=1
         header_bytes=bytes(header, 'utf-8')
 
