@@ -13,6 +13,7 @@ import numpy as np
 from time import sleep
 from conexion_servidor import *
 from PIL import Image, ImageTk
+from audio import *
 
 end_call = 0
 current_call = 0
@@ -250,6 +251,12 @@ def manage_call(client,connectionSocket):
 
     sender = threading.Thread(target=video_sender,args = (client,))
     sender.start()
+
+    audio_send = threading.Thread(target=audio_sender,args = (client,))
+    audio_send.start()
+
+    audio_recv = threading.Thread(target=audio_receiver,args = (client,))
+    audio_recv.start()
 
     client.app.showSubWindow("Panel de la llamada")
 
