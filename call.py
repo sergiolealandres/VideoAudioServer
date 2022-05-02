@@ -190,6 +190,37 @@ def call_waiter(user_Port,client,semaforo):
                     mensaje = "CALL_DENIED "+words[1]
                     connectionSocket.send(mensaje.encode())
                     connectionSocket.close()
+        elif sentence[:13] == "CALL_ACCEPTED":
+            print("prelock call")
+            splitted=sentence.split(" ")
+
+            if splitted[1]!=client.selected_nick:
+                client.app.infoBox("Error", "Los nicks no coinciden")
+                callSocket.close()
+                return
+
+            
+            semaforo.acquire()
+            if(current_call == 1):
+                semaforo.release()
+                callSocket.close()
+                raise Exception("There is already a call")
+
+
+            current_call = 1
+            semaforo.release()
+
+
+            
+            client.selected_data_port=splitted[2]
+            data= query(splitted[1])
+            nick, ip, control_port, versions=data
+
+            client.selected_ip=ip
+            
+            print("post-lock call")
+            thr = threading.Thread(target=manage_call,args = (client,None,))
+            thr.start()
         else:
             print("Se ha recibido algo que no es")
             connectionSocket.close() 
@@ -212,6 +243,7 @@ def manage_call(client,connectionSocket):
     client.receiver_event = threading.Event()
     client.call_hold = False
     client.current_frame = np.array([])
+    client.cap.release()
     receiver = threading.Thread(target=video_receiver,args = (client,))
     receiver.start()
 
@@ -256,6 +288,12 @@ def manage_call(client,connectionSocket):
     callSocket.close()
     sender.join()
     receiver.join()
+
+    if(client.camera_conected == 1):
+        client.cap = cv2.VideoCapture(0)
+        client.app.registerEvent(client.capturaVideo)
+    else:
+        client.cap = cv2.VideoCapture(client.imagen_no_camera)
     return
 
 
