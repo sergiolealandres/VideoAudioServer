@@ -64,12 +64,14 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
 
         if splitted[1]!=target_nick:
             client.app.infoBox("Error", "Los nicks no coinciden")
+            callSocket.close()
             return
 
         
         semaforo.acquire()
         if(current_call == 1):
             semaforo.release()
+            callSocket.close()
             raise Exception("There is already a call")
 
 
@@ -89,10 +91,13 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
         thr.start()
     elif sentence[:9] == "CALL_BUSY":
         client.app.infoBox("Error", "El usuario " + target_nick + " está ocupado")
+        callSocket.close()
     elif sentence[:11] == "CALL_DENIED":
         client.app.infoBox("Error", "El usuario " + target_nick + " ha rechazado la llamada")
+        callSocket.close()
     else:
         client.app.infoBox("Error", "La respuesta no ha sido válida")
+        callSocket.close()
 
 def call_waiter(user_Port,client,semaforo):
     global current_call
@@ -259,7 +264,7 @@ def video_receiver(client):
     receiverSocket.settimeout(0.1)
     buffer_circular=[]
     id_ultimo_paquete_reproducido=0
-    timestamp_ultimo_paquete=0
+    tiempo_ultimo_paquete=0
     reproduction_fps=24
     fps_enviados_segundo=0
     
@@ -272,7 +277,7 @@ def video_receiver(client):
 
     #LLenado de dos segundos
     def llenar_buffer(buffer_circular,reproduction_fps):
-        timestamp_ultimo_paquete = 0
+        tiempo_ultimo_paquete = 0
         while end_call == 0 and client.app.alive and len(buffer_circular)<2*reproduction_fps:
 
             if client.call_hold == 0:
@@ -291,19 +296,20 @@ def video_receiver(client):
                 timestamp=float(timestamp.decode('utf-8'))
                 order_num=int(order_num.decode('utf-8'))
 
-                if timestamp_ultimo_paquete != 0:
-                    time_diff = timestamp - timestamp_ultimo_paquete
-                    timestamp_ultimo_paquete=timestamp
+                if tiempo_ultimo_paquete != 0:
+                    tiempo = time.time()
+                    time_diff = tiempo - tiempo_ultimo_paquete
+                    tiempo_ultimo_paquete=tiempo
                 else:
                     time_diff = 1/reproduction_fps
-                    timestamp_ultimo_paquete = timestamp
+                    tiempo_ultimo_paquete = time.time()
 
-                reproduction_fps=max(MIN_FPS,round(1/((1/reproduction_fps + time_diff)/2)))
+                reproduction_fps=max(MIN_FPS,round(1/((0.8/reproduction_fps + time_diff*0.2))))
                 heapq.heappush(buffer_circular, (order_num,timestamp, frame))
                 print("llenando",len(buffer_circular),reproduction_fps)
-        return reproduction_fps,timestamp_ultimo_paquete
+        return reproduction_fps,tiempo_ultimo_paquete
     
-    reproduction_fps,timestamp_ultimo_paquete = llenar_buffer(buffer_circular,reproduction_fps)
+    reproduction_fps,tiempo_ultimo_paquete = llenar_buffer(buffer_circular,reproduction_fps)
    
     if(len(buffer_circular)>0):
         control_time=buffer_circular[0][1]
@@ -331,10 +337,11 @@ def video_receiver(client):
             
             if order_num < id_ultimo_paquete_reproducido:
                 continue
-
-            time_diff = timestamp - timestamp_ultimo_paquete
-
-            reproduction_fps=max(MIN_FPS,round(1/((1/reproduction_fps + time_diff)/2)))
+            
+            tiempo = time.time()
+            time_diff = tiempo - tiempo_ultimo_paquete
+            tiempo_ultimo_paquete = tiempo
+            reproduction_fps=max(MIN_FPS,round(1/((0.8/reproduction_fps + time_diff*0.2))))
            
             heapq.heappush(buffer_circular, (order_num,timestamp, frame))
 
@@ -351,8 +358,7 @@ def video_receiver(client):
                     control_time += 1/reproduction_fps
                     frame=buffer_circular[0][2]
                     heapq.heappop(buffer_circular)
-                
-                timestamp_ultimo_paquete = timestamp
+               
 
                 own_video = client.current_frame
                 if own_video.size > 0:
@@ -384,7 +390,7 @@ def video_receiver(client):
                 client.receiver_event.clear()
                 if(end_call == 0 and client.app.alive and client.call_hold is False):
                     buffer_circular = []
-                    reproduction_fps,timestamp_ultimo_paquete = llenar_buffer(buffer_circular,reproduction_fps)
+                    reproduction_fps,tiempo_ultimo_paquete = llenar_buffer(buffer_circular,reproduction_fps)
                     print("buffer",len(buffer_circular))
                     if(len(buffer_circular)>0):
                         control_time=buffer_circular[0][1]
