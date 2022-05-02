@@ -351,8 +351,6 @@ def video_receiver(client):
             reproduction_fps=max(MIN_FPS,round(1/((0.8/reproduction_fps + time_diff*0.2))))
            
             heapq.heappush(buffer_circular, (order_num,timestamp, frame))
-
-            first=buffer_circular[0][1]
             
             diff = time.time() - control_time - 1/reproduction_fps
             print("fps: ",reproduction_fps,fps,len(buffer_circular),diff)
@@ -381,6 +379,33 @@ def video_receiver(client):
                     img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                     client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage') 
 
+                if diff >2:
+
+            
+                    while len(buffer_circular) > 2*reproduction_fps:
+
+                        frame=buffer_circular[0][2]
+                        heapq.heappop(buffer_circular)
+                
+
+                        own_video = client.current_frame
+                        if own_video.size > 0:
+                            own_video = cv2.resize(own_video,resolucion_own)
+                            frame_shown = frame
+                            frame_shown[0:own_video.shape[0],0:own_video.shape[1]] = own_video
+                        else:
+                            frame_shown = frame
+
+                        # Display
+                        if frame_shown is not None:
+                            cv2_im = cv2.cvtColor(frame_shown, cv2.COLOR_BGR2RGB)
+                            img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
+                            client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage')
+
+                    control_time=buffer_circular[0][1]
+
+
+
         else:
             #clean the buffer
             while end_call == 0 and client.app.alive and client.call_hold is True:
@@ -404,7 +429,7 @@ def video_receiver(client):
 
         
 
-    client.app.setImageData("Video mostrado", client.imagen_no_camera, fmt = 'PhotoImage')
+    client.app.setImage("Video mostrado", client.imagen_no_camera)
     print("termino de recibir video")
     receiverSocket.close()
 
@@ -466,13 +491,14 @@ def call_end(client):
     global callSocket
     global end_call
     client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
-    end_call=1
-    time.sleep(0.5)
+    
     message = 'CALL_END ' + client.my_nick
     message = bytes(message, 'utf-8')
     callSocket.send(message)
+    end_call=1
     client.sender_event.set()
     client.receiver_event.set()
+    
     print("lo mando")
 
 def parar_llamada(client):
