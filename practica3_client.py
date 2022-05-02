@@ -59,7 +59,7 @@ class VideoClient(object):
 
 		self.app.startSubWindow("Panel de la llamada", modal=True)
 		self.app.addImage("Video mostrado", self.imagen_no_camera)
-		self.app.addButtons(["Colgar","Pausar", "Renaudar", "Webcam", "Video"], self.buttonsCallback)
+		self.app.addButtons(["Colgar","Pausar", "Reanudar", "Webcam", "Video"], self.buttonsCallback)
 		#self.app.addLabel("Fps", "0 fps")
 		self.app.addLabelEntry("Enviar Video", 2, 0)
 		self.app.setEntry("Enviar Video", self.video_para_mostrar)
@@ -297,14 +297,15 @@ class VideoClient(object):
 			self.app.setEntryFocus("Nick\t\t")
 
 		elif button =="Pausar":
-			if self.stop_sending_video==False:
-				self.stop_sending_video=True
+			if self.call_hold==False:
+				self.call_hold=True
 				parar_llamada(self)
 
-		elif button =='Renaudar':
-			if self.stop_sending_video==True:
+		elif button =='Reanudar':
+			if self.call_hold==True:
+				
 				continuar_llamada(self)
-				self.stop_sending_video=False
+				self.call_hold=False
  
 		elif button=='Salir':
 			quit()
