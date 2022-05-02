@@ -47,7 +47,6 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
         client.app.infoBox("Error", "El usuario " + target_nick + " no está conectado")
         return
 
-    #sentence = "CALLING "+ target_nick + " "+ user_IP + ":"+ str(user_Port)
     sentence = "CALLING "+ client.my_nick + " "+ str(client.my_data_port)
     callSocket.send(sentence.encode())
     callSocket.settimeout(20)

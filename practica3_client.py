@@ -283,6 +283,10 @@ class VideoClient(object):
 				self.app.infoBox("Error","Not valid control port")
 				return
 
+			if dont_call_myself(self)==True:
+				self.app.infoBox("Error","No puedes llamarte a ti mismo")
+				return
+
 			call(self.selected_nick, self.selected_ip, self.selected_control_port, self.my_ip, self.my_control_port, self.semaforo,self)
 
 

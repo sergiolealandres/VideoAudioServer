@@ -17,3 +17,7 @@ def validNum(num):
 def validPort(port):
 
     return int(port)>=1024 and int(port)<=49151
+
+def dont_call_myself(client):
+
+    return client.selected_ip == client.my_ip and client.selected_nick == client.my_nick
