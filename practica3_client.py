@@ -27,6 +27,10 @@ class VideoClient(object):
 	enviando=None
 	stop_sending_video=False
 	event_call=threading.Event()
+	resolucion_sender="HIGH"
+	resolucion_sender_value="640x480"
+	resolucion_tuple = (640,480)
+
 
 	def __init__(self, window_size):
 		
@@ -59,13 +63,11 @@ class VideoClient(object):
 
 		self.app.startSubWindow("Panel de la llamada", modal=True)
 		self.app.addImage("Video mostrado", self.imagen_no_camera)
-		self.app.addButtons(["Colgar","Pausar", "Reanudar", "Webcam", "Video"], self.buttonsCallback)
-		#self.app.addLabel("Fps", "0 fps")
-		self.app.addLabelEntry("Enviar Video", 2, 0)
-		self.app.setEntry("Enviar Video", self.video_para_mostrar)
+		self.app.addButtons(["Colgar","Pausar", "Reanudar", "Webcam", "Video", "Resolución Baja","Resolución Media","Resolución Alta"], self.buttonsCallback)
 		self.app.stopSubWindow()
-		'''
-		self.app.startSubWindow("Panel de registro", modal=True)
+		
+		self.app.startLabelFrame("Panel de registro")
+
 		self.app.addLabelEntry("Nick\t\t", 0, 0)
 		self.app.addLabelSecretEntry("Contraseña\t", 1, 0)
 		self.app.addLabelEntry("IP\t\t", 2, 0)
@@ -79,10 +81,14 @@ class VideoClient(object):
 		self.app.setEntry("Protocolo\t\t", "V0")
 		self.app.setEntry("Puerto Control\t\t", "8080")
 		self.app.setEntry("Puerto Datos\t\t", "4444")
-		'''
+		self.app.stopLabelFrame()
+
+		#self.app.showSubWindow("Panel de registro")
+
+		
 		with self.app.tabbedFrame("Tabs"):
 		# Tab para registrarse.
-			
+			'''
 			with self.app.tab("Registrarse"):
 				self.app.setFg("DarkBlue")
 				self.app.setBg("LightSkyBlue")
@@ -100,6 +106,7 @@ class VideoClient(object):
 				self.app.setEntry("Protocolo\t\t", "V0")
 				self.app.setEntry("Puerto Control\t\t", "8080")
 				self.app.setEntry("Puerto Datos\t\t", "4444")
+			'''
 			
 
 			with self.app.tab("SEARCH USER"):
@@ -119,14 +126,11 @@ class VideoClient(object):
 				self.app.addListBox("Usuarios Registrados", nicks, 0, 0, 1, 4)
 				self.app.addButton("Actualizar", self.buttonsCallback, 0, 1)
 				self.app.addButton("LLamar al usuario seleccionado", self.buttonsCallback, 1, 1)
-                
-                
-		# Barra de estado
-		# Debe actualizarse con información útil sobre la llamada (duración, FPS, etc...)
 
 		self.app.setTabbedFrameDisabledTab("Tabs", "LIST USERS")
 		self.app.setTabbedFrameDisabledTab("Tabs", "SEARCH USER")
-		self.app.addStatusbar(fields=2)
+		
+                
 
 	def start(self):
 		self.app.go()
@@ -221,6 +225,8 @@ class VideoClient(object):
 			
 			self.app.setTabbedFrameDisabledTab("Tabs", "LIST USERS", False)
 			self.app.setTabbedFrameDisabledTab("Tabs", "SEARCH USER", False)
+			#self.app.hideSubWindow("Panel de registro", useStopFunction=False)
+			
 			thr = threading.Thread(target=call_waiter,args = (self.my_control_port, self, self.semaforo))
 			thr.start()
 
@@ -323,24 +329,14 @@ class VideoClient(object):
 
 		elif button == 'Video':
 
-			fichero=self.app.getEntry("Enviar Video")
+			fichero= self.app.openBox(title=None, dirName="imgs", fileTypes=None, asFile=False, parent=None, multiple=False, mode='r')
 
-			if len(fichero)==0:
-
-				self.app.infoBox("Error","Debes de introducir el nombre de un video ")
-				return
-
-			try:
-				file = open(fichero, 'r')
-				file.close()
-			except FileNotFoundError:
-				self.app.infoBox("Error", "No se ha podido encontrar el archivo, prueba de nuevo")
+			if fichero is None:
 				return
 
 			self.enviando = cv2.VideoCapture(fichero)
 
 			self.video_mostrado=fichero
-
 
 
 		elif button =="Aceptar":
@@ -370,6 +366,22 @@ class VideoClient(object):
 				self.app.setButton("Desconectar Cam", "Conectar Cam")
 				self.cap = cv2.VideoCapture(self.imagen_no_camera)
 				#self.app.registerEvent(self.capturaVideo)
+
+		elif button == "Resolucion Baja":
+
+			self.resolucion_sender="LOW"
+			self.resolucion_sender_value="160x120"
+
+		elif button == "Resolucion Media":
+
+			self.resolucion_sender="MEDIUM"
+			self.resolucion_sender_value="320x240"
+
+		elif button == "Resolucion Alta":
+
+			self.resolucion_sender="HIGH"
+			self.resolucion_sender_value="640x480"
+
 
 if __name__ == '__main__':
 
