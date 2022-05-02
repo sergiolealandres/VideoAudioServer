@@ -5,7 +5,7 @@ import pyaudio
 import socket
 import queue
 
-CHUNK = 1024
+CHUNK = 10*1024
 FORMAT = pyaudio.paInt16
 CHANNELS = 2
 RATE = 44100
@@ -19,7 +19,7 @@ def audio_sender(client):
 
     #CHUNK = 10*1024
     print("Before pyaudio send")
-    time.sleep(1)
+    #time.sleep(1)
     p = pyaudio.PyAudio()
     
     print("Before stream sender")
@@ -31,19 +31,30 @@ def audio_sender(client):
     print("After stream sender")
 
     data = None
-
+    
     while client.app.alive:
-        data = stream.read(CHUNK)
-        audio_send_socket.sendto(data,int(client.selected_data_port)-1)
+    #while True:
+        try:  
+            data = stream.read(CHUNK)
+        except:
+            print("Error")
+            time.sleep(0.1)
+            continue
+        print("data", len(data))
+        audio_send_socket.sendto(data,(client.selected_ip,int(client.selected_data_port)-1))
+        #audio_send_socket.sendto(data,(client,8000))
         time.sleep(CHUNK/RATE)
 
     audio_send_socket.close()
 
 def audio_receiver(client):
     print("Entramos audio receiver")
-    q = queue.Queue(maxsize=2000)
+    #q = queue.Queue(maxsize=2000)
     audio_receiver_socket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     audio_receiver_socket.setsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF,BUFF_SIZE)
+    #audio_receiver_socket.bind((client,8000))
+    audio_receiver_socket.bind((client.my_ip,int(client.my_data_port)-1))
+    audio_receiver_socket.settimeout(0.4)
     print("Before pyaudio recv")
     #time.sleep(1)
     p = pyaudio.PyAudio()
@@ -60,8 +71,19 @@ def audio_receiver(client):
     # create socket
 
     while client.app.alive:
-        frame,_= audio_receiver_socket.recvfrom(BUFF_SIZE)
+    #while True:
+        try:
+            frame,_= audio_receiver_socket.recvfrom(BUFF_SIZE)
+        except socket.timeout:
+            print("No ha llegado audio")
+            continue
+        print("frame1",len(frame))
         stream.write(frame)
     
     audio_receiver_socket.close()
-    print('Audio closed')
+
+"""hostname = socket.gethostname()
+local_ip = socket.gethostbyname(hostname)
+
+audio_sender(local_ip)
+#audio_receiver(local_ip)"""

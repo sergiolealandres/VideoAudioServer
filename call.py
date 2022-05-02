@@ -246,11 +246,11 @@ def manage_call(client,connectionSocket):
     client.call_hold = False
     client.current_frame = np.array([])
     client.cap.release()
-    receiver = threading.Thread(target=video_receiver,args = (client,))
-    receiver.start()
+    #receiver = threading.Thread(target=video_receiver,args = (client,))
+    #receiver.start()
 
-    sender = threading.Thread(target=video_sender,args = (client,))
-    sender.start()
+    #sender = threading.Thread(target=video_sender,args = (client,))
+    #sender.start()
 
     audio_send = threading.Thread(target=audio_sender,args = (client,))
     audio_send.start()
@@ -267,11 +267,12 @@ def manage_call(client,connectionSocket):
         except socket.timeout:
             continue
         sentence = sentence.decode('utf-8')
+        
+        if sentence == '':
+            continue
         print("Se ha recibido:")
         print(sentence)
         print("")
-        if sentence == '':
-            continue
         if sentence[:9] == "CALL_HOLD":
             client.call_hold=True
         elif sentence[:11] == "CALL_RESUME":
@@ -294,8 +295,8 @@ def manage_call(client,connectionSocket):
     client.semaforo.release()
 
     callSocket.close()
-    sender.join()
-    receiver.join()
+    #sender.join()
+    #receiver.join()
 
     if(client.camera_conected == 1):
         client.cap = cv2.VideoCapture(0)
