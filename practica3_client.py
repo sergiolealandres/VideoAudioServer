@@ -64,38 +64,19 @@ class VideoClient(object):
 		self.app.startSubWindow("Panel de la llamada", modal=True)
 		self.app.addImage("Video mostrado", self.imagen_no_camera)
 		self.app.addButtons(["Colgar","Pausar", "Reanudar", "Webcam", "Video", "Resolución Baja","Resolución Media","Resolución Alta"], self.buttonsCallback)
-		self.app.stopSubWindow()
 		
-		self.app.startLabelFrame("Panel de registro")
-
-		self.app.addLabelEntry("Nick\t\t", 0, 0)
-		self.app.addLabelSecretEntry("Contraseña\t", 1, 0)
-		self.app.addLabelEntry("IP\t\t", 2, 0)
-		self.app.addButton("IP VPN", self.buttonsCallback, 2,1)
-		self.app.addLabelEntry("Puerto Control\t\t", 3, 0)
-		self.app.addLabelEntry("Puerto Datos\t\t", 4, 0)
-		self.app.addLabelEntry("Protocolo\t\t", 5, 0)
-		self.app.addButtons(["Registrarse", "Clean"], self.buttonsCallback, 6, 0, 2)
-		self.app.setEntryFocus("Nick\t\t")
-		self.app.setEntry("IP\t\t", self.local_IP)
-		self.app.setEntry("Protocolo\t\t", "V0")
-		self.app.setEntry("Puerto Control\t\t", "8080")
-		self.app.setEntry("Puerto Datos\t\t", "4444")
-		self.app.stopLabelFrame()
-
-		#self.app.showSubWindow("Panel de registro")
-
+		self.app.stopSubWindow()
 		
 		with self.app.tabbedFrame("Tabs"):
 		# Tab para registrarse.
-			'''
+			
 			with self.app.tab("Registrarse"):
 				self.app.setFg("DarkBlue")
 				self.app.setBg("LightSkyBlue")
 				self.app.addLabelEntry("Nick\t\t", 0, 0)
 				self.app.addLabelSecretEntry("Contraseña\t", 1, 0)
 				self.app.addLabelEntry("IP\t\t", 2, 0)
-				self.app.addButton("IP VPN", self.buttonsCallback, 2,1)
+				#self.app.addButton("IP VPN", self.buttonsCallback, 2,1)
 				self.app.addLabelEntry("Puerto Control\t\t", 3, 0)
 				self.app.addLabelEntry("Puerto Datos\t\t", 4, 0)
 				self.app.addLabelEntry("Protocolo\t\t", 5, 0)
@@ -106,7 +87,6 @@ class VideoClient(object):
 				self.app.setEntry("Protocolo\t\t", "V0")
 				self.app.setEntry("Puerto Control\t\t", "8080")
 				self.app.setEntry("Puerto Datos\t\t", "4444")
-			'''
 			
 
 			with self.app.tab("SEARCH USER"):
@@ -126,11 +106,14 @@ class VideoClient(object):
 				self.app.addListBox("Usuarios Registrados", nicks, 0, 0, 1, 4)
 				self.app.addButton("Actualizar", self.buttonsCallback, 0, 1)
 				self.app.addButton("LLamar al usuario seleccionado", self.buttonsCallback, 1, 1)
+                
+                
+		# Barra de estado
+		# Debe actualizarse con información útil sobre la llamada (duración, FPS, etc...)
 
 		self.app.setTabbedFrameDisabledTab("Tabs", "LIST USERS")
 		self.app.setTabbedFrameDisabledTab("Tabs", "SEARCH USER")
-		
-                
+		self.app.addStatusbar(fields=2)
 
 	def start(self):
 		self.app.go()
@@ -225,8 +208,6 @@ class VideoClient(object):
 			
 			self.app.setTabbedFrameDisabledTab("Tabs", "LIST USERS", False)
 			self.app.setTabbedFrameDisabledTab("Tabs", "SEARCH USER", False)
-			#self.app.hideSubWindow("Panel de registro", useStopFunction=False)
-			
 			thr = threading.Thread(target=call_waiter,args = (self.my_control_port, self, self.semaforo))
 			thr.start()
 
@@ -381,6 +362,7 @@ class VideoClient(object):
 
 			self.resolucion_sender="HIGH"
 			self.resolucion_sender_value="640x480"
+			
 
 
 if __name__ == '__main__':
