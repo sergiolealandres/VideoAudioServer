@@ -10,8 +10,11 @@ FORMAT = pyaudio.paInt16
 CHANNELS = 2
 RATE = 44100
 BUFF_SIZE = 65536
+PORT = 8000
 
+p = pyaudio.PyAudio()
 def audio_sender(client):
+    global p
     print("Entramos audio sender")
     audio_send_socket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     audio_send_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -20,7 +23,7 @@ def audio_sender(client):
     #CHUNK = 10*1024
     print("Before pyaudio send")
     #time.sleep(1)
-    p = pyaudio.PyAudio()
+    #p = pyaudio.PyAudio()
     
     print("Before stream sender")
     stream = p.open(format=FORMAT,
@@ -48,6 +51,7 @@ def audio_sender(client):
     audio_send_socket.close()
 
 def audio_receiver(client):
+    global p
     print("Entramos audio receiver")
     #q = queue.Queue(maxsize=2000)
     audio_receiver_socket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -57,7 +61,7 @@ def audio_receiver(client):
     audio_receiver_socket.settimeout(0.4)
     print("Before pyaudio recv")
     #time.sleep(1)
-    p = pyaudio.PyAudio()
+    #p = pyaudio.PyAudio()
     
     #CHUNK = 10*1024
     print("Before stream receiver")
@@ -85,5 +89,7 @@ def audio_receiver(client):
 """hostname = socket.gethostname()
 local_ip = socket.gethostbyname(hostname)
 
-audio_sender(local_ip)
-#audio_receiver(local_ip)"""
+thr = threading.Thread(target=audio_receiver, args = (local_ip,))
+thr.start()
+audio_sender(local_ip)"""
+
