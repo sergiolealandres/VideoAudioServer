@@ -7,6 +7,7 @@ from call import *
 import cv2
 from conexion_servidor import *
 from verification import *
+import netifaces as ni
 
 
 class VideoClient(object):
@@ -19,6 +20,8 @@ class VideoClient(object):
 	s.connect(("8.8.8.8", 80))
 	local_IP = s.getsockname()[0]
 	s.close()
+	local_IP = ni.ifaddresses('tun0')[ni.AF_INET][0]['addr']
+
 	imagen_no_camera="imgs/nocamera.gif"
 	accepted_call=0
 	resolucion = "640x480"
@@ -30,6 +33,8 @@ class VideoClient(object):
 	resolucion_sender="HIGH"
 	resolucion_sender_value="640x480"
 	resolucion_tuple = (640,480)
+	sender_tuple = (640,480)
+	searched_user=False
 
 
 	def __init__(self, window_size):
@@ -62,7 +67,9 @@ class VideoClient(object):
 
 
 		self.app.startSubWindow("Panel de la llamada", modal=True)
+		self.app.setSize(1000, 800)
 		self.app.addImage("Video mostrado", self.imagen_no_camera)
+		self.app.setImageSize("Video mostrado", 640, 480)
 		self.app.addButtons(["Colgar","Pausar", "Reanudar", "Webcam", "Video", "Resolución Baja","Resolución Media","Resolución Alta"], self.buttonsCallback)
 		
 		self.app.stopSubWindow()
@@ -143,7 +150,7 @@ class VideoClient(object):
 		if frame is None and ret==False:
 			
 			return
-		frame = cv2.resize(frame, (640,480))
+		frame = cv2.resize(frame, (450,337))
 		cv2_im = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
 		img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))		    
 
@@ -159,14 +166,15 @@ class VideoClient(object):
 		# Puede añadirse algún valor superior si la cámara lo permite
 		# pero no modificar estos
 		if resolution == "LOW":
-			self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 160) 
-			self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 120) 
+			print("cambio a low")
+			self.enviando.set(cv2.CAP_PROP_FRAME_WIDTH, 160) 
+			self.enviando.set(cv2.CAP_PROP_FRAME_HEIGHT, 120) 
 		elif resolution == "MEDIUM":
-			self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320) 
-			self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240) 
+			self.enviando.set(cv2.CAP_PROP_FRAME_WIDTH, 320) 
+			self.enviando.set(cv2.CAP_PROP_FRAME_HEIGHT, 240) 
 		elif resolution == "HIGH":
-			self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640) 
-			self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480) 
+			self.enviando.set(cv2.CAP_PROP_FRAME_WIDTH, 640) 
+			self.enviando.set(cv2.CAP_PROP_FRAME_HEIGHT, 480) 
 
 
 				
@@ -243,9 +251,14 @@ class VideoClient(object):
 			
 			self.selected_nick, self.selected_ip, self.selected_control_port, self.selected_version = data
 			self.selected_control_port=(self.selected_control_port)
-			nick=self.app.setLabel("UserInfo", "Nick = " + nick + "\nIp = " +self.selected_ip + "\nPuerto de control = " + self.selected_control_port + "\nVersión = " + self.selected_version)
+			self.app.setLabel("UserInfo", "Nick = " + nick + "\nIp = " +self.selected_ip + "\nPuerto de control = " + self.selected_control_port + "\nVersión = " + self.selected_version)
+			self.searched_user=True
 
 		elif button =="Call":
+
+			if self.searched_user==False:
+				self.app.infoBox("Error", "Busque primero un usuario para llamar")
+				return
 			
 			if validIP(self.selected_ip)==False:
 				self.app.infoBox("Error", self.selected_ip + " no es una ip válida")
@@ -260,6 +273,8 @@ class VideoClient(object):
 
 			
 		elif button == "LLamar al usuario seleccionado":
+
+			
 			
 			user_selected = self.app.getListBox("Usuarios Registrados")
 			if user_selected == []:
@@ -286,9 +301,9 @@ class VideoClient(object):
 			if dont_call_myself(self)==True:
 				self.app.infoBox("Error","No puedes llamarte a ti mismo")
 				return
-
+			self.searched_user=True
 			call(self.selected_nick, self.selected_ip, self.selected_control_port, self.my_ip, self.my_control_port, self.semaforo,self)
-
+			
 
 		elif button == 'Actualizar':
 
@@ -372,20 +387,23 @@ class VideoClient(object):
 				self.cap = cv2.VideoCapture(self.imagen_no_camera)
 				#self.app.registerEvent(self.capturaVideo)
 
-		elif button == "Resolucion Baja":
+		elif button == "Resolución Baja":
 
 			self.resolucion_sender="LOW"
 			self.resolucion_sender_value="160x120"
+			self.sender_tuple = (160,120)
 
-		elif button == "Resolucion Media":
+		elif button == "Resolución Media":
 
 			self.resolucion_sender="MEDIUM"
 			self.resolucion_sender_value="320x240"
+			self.sender_tuple = (320,240)
 
-		elif button == "Resolucion Alta":
+		elif button == "Resolución Alta":
 
 			self.resolucion_sender="HIGH"
 			self.resolucion_sender_value="640x480"
+			self.sender_tuple = (640,480)
 			
 
 

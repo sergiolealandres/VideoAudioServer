@@ -367,13 +367,16 @@ def video_receiver(client):
                 #print("No llega")
                 continue
 
+            print("LEN DATA",len(data))
             data=data.split(b'#')
+            
             order_num, timestamp, resolucion, fps=data[0], data[1], data[2], data[3]
             resolucion = resolucion.decode("utf-8")
             resolucion = resolucion.split("x")
             resolucion = (int(resolucion[0]),int(resolucion[1]))
+            print(resolucion)
             real_data=b"#".join(data[4:])
-            resolucion_own = (int(resolucion[0]/4),int(resolucion[1]/4))
+            resolucion_own = (160,120)
             frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
             timestamp=float(timestamp.decode('utf-8'))
             order_num=int(order_num.decode('utf-8'))
@@ -403,15 +406,19 @@ def video_receiver(client):
 
                 own_video = client.current_frame
                 if own_video.size > 0:
+                    frame=cv2.resize(frame, client.resolucion_tuple)
                     own_video = cv2.resize(own_video,resolucion_own)
                     frame_shown = frame
                     frame_shown[0:own_video.shape[0],0:own_video.shape[1]] = own_video
                 else:
-                    frame_shown = frame
+                    frame_shown = cv2.resize(frame, client.resolucion_tuple)
+                    
 
                 # Display
                 if frame_shown is not None:
-                    frame_shown=cv2.resize(frame_shown, client.resolucion_tuple)
+
+                    
+                    
                     cv2_im = cv2.cvtColor(frame_shown, cv2.COLOR_BGR2RGB)
                     img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                     client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage') 
@@ -427,15 +434,14 @@ def video_receiver(client):
 
                         own_video = client.current_frame
                         if own_video.size > 0:
+                            frame_shown = cv2.resize(frame, client.resolucion_tuple)
                             own_video = cv2.resize(own_video,resolucion_own)
-                            frame_shown = frame
                             frame_shown[0:own_video.shape[0],0:own_video.shape[1]] = own_video
                         else:
-                            frame_shown = frame
+                            frame_shown = cv2.resize(frame, client.resolucion_tuple)
 
                         # Display
                         if frame_shown is not None:
-                            frame_shown=cv2.resize(frame_shown, client.resolucion_tuple)
                             cv2_im = cv2.cvtColor(frame_shown, cv2.COLOR_BGR2RGB)
                             img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                             client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage')
@@ -476,6 +482,7 @@ def video_sender(client):
     fps_sending = 32
     senderSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     senderSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    print(int((client.selected_data_port)))
     
     order_num=0
 
@@ -487,6 +494,9 @@ def video_sender(client):
             client.sender_event.clear()
             continue
         tiempo_inicio = time.time()
+
+        #client.setImageResolution(client.resolucion_sender)
+
         ret, frame = client.enviando.read()
         
         if ret is False:
@@ -497,6 +507,7 @@ def video_sender(client):
             continue
 
         client.current_frame = frame
+        frame = cv2.resize(frame,client.sender_tuple)
     
         encode_param = [cv2.IMWRITE_JPEG_QUALITY, 50]
         #print(frame, encode_param)
@@ -507,8 +518,8 @@ def video_sender(client):
 
         # Send message length first
 
-
-        header=str(order_num)+'#'+str(time.time())+'#'+client.resolucion+"#"+"36"+"#"
+        print("eooooooooooo", client.resolucion_sender_value, fps_sending)
+        header=str(order_num)+'#'+str(time.time())+'#'+client.resolucion_sender_value+"#"+str(fps_sending)+"#"
         order_num+=1
         header_bytes=bytes(header, 'utf-8')
 
@@ -519,7 +530,7 @@ def video_sender(client):
         time_diff = time.time() - tiempo_inicio
         if time_diff < 1.0/fps_sending:
             time.sleep(1.0/fps_sending - time_diff)
-
+        
         senderSocket.sendto(header_bytes + data,(client.selected_ip,int(client.selected_data_port)))
     
     client.enviando.release()
@@ -539,8 +550,6 @@ def call_end(client):
     
     client.sender_event.set()
     client.receiver_event.set()
-    
-    
     
 
 def parar_llamada(client):
@@ -566,15 +575,7 @@ def resetear_valores(client):
 
     client.selected_nick, client.selected_ip, client.selected_control_port, \
         client.selected_data_port,client.selected_version=None,None, None,None,None
+    client.searched_user=False
+    client.app.setEntry("User\t\t", "")
+    client.app.setLabel("UserInfo", "")
 
-'''
-semaforo = threading.Lock()
-#call_waiter(8000,None,semaforo)
-#thr = threading.Thread(target=call_waiter,args = (8004,None,semaforo))
-#thr.start()
-
-hostname = socket.gethostname()
-local_ip = socket.gethostbyname(hostname)
-print("Calling...")
-print(call("paco",local_ip,8000,local_ip,8001,semaforo,None))
-'''
