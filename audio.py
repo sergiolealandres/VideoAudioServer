@@ -29,7 +29,7 @@ def audio_sender(client):
     data = None
     
     while client.end_call == 0 and client.app.alive:
-        if client.call_hold:
+        if client.call_hold is True or client.mute is True:
             stream.stop_stream()
             client.audio_sender_event.wait(timeout = 2)
             client.audio_sender_event.clear()
@@ -75,7 +75,7 @@ def audio_receiver(client):
     # create socket
 
     while client.end_call == 0 and client.app.alive:
-        if client.call_hold is False:
+        if client.call_hold is False and client.deafen is False:
             try:
                 data,_= audio_receiver_socket.recvfrom(BUFF_SIZE)
             except socket.timeout:

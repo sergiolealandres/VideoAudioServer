@@ -30,7 +30,8 @@ class VideoClient(object):
 	resolucion_sender="HIGH"
 	resolucion_sender_value="640x480"
 	resolucion_tuple = (640,480)
-
+	mute = False
+	deafen = False
 
 	def __init__(self, window_size):
 		
@@ -63,7 +64,7 @@ class VideoClient(object):
 
 		self.app.startSubWindow("Panel de la llamada", modal=True)
 		self.app.addImage("Video mostrado", self.imagen_no_camera)
-		self.app.addButtons(["Colgar","Pausar", "Reanudar", "Webcam", "Video", "Resolución Baja","Resolución Media","Resolución Alta"], self.buttonsCallback)
+		self.app.addButtons(["Colgar","Pausar", "Reanudar", "Webcam", "Video", "Resolución Baja","Resolución Media","Resolución Alta","Mute","Ensordecer"], self.buttonsCallback)
 		
 		self.app.stopSubWindow()
 		
@@ -362,7 +363,19 @@ class VideoClient(object):
 
 			self.resolucion_sender="HIGH"
 			self.resolucion_sender_value="640x480"
-			
+		
+		elif button == "Mute":
+			if(self.mute is False):
+				self.mute = True
+			else:
+				self.mute = False
+				self.audio_sender_event.set()
+		elif button == "Ensordecer":
+			if(self.deafen is False):
+				self.deafen = True
+			else:
+				self.deafen = False
+				self.receiver_sender_event.set()
 
 
 if __name__ == '__main__':

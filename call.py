@@ -242,6 +242,8 @@ def manage_call(client,connectionSocket):
         callSocket = connectionSocket
 
     client.end_call= 0
+    client.mute = False
+    client.deafen = False
     client.timestamp_last_image = 0
     client.sender_event = threading.Event()
     client.receiver_event = threading.Event()
