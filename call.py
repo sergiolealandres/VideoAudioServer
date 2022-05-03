@@ -14,6 +14,7 @@ from time import sleep
 from conexion_servidor import *
 from PIL import Image, ImageTk
 from audio import *
+from concurrent.futures import ThreadPoolExecutor
 
 
 current_call = 0
@@ -241,6 +242,7 @@ def manage_call(client,connectionSocket):
         callSocket = connectionSocket
 
     client.end_call= 0
+    client.timestamp_last_image = 0
     client.sender_event = threading.Event()
     client.receiver_event = threading.Event()
     client.audio_sender_event = threading.Event()
@@ -250,16 +252,18 @@ def manage_call(client,connectionSocket):
     client.current_frame = np.array([])
     client.cap.release()
     receiver = threading.Thread(target=video_receiver,args = (client,))
-    receiver.start()
 
     sender = threading.Thread(target=video_sender,args = (client,))
-    sender.start()
 
     audio_send = threading.Thread(target=audio_sender,args = (client,))
-    audio_send.start()
 
     audio_recv = threading.Thread(target=audio_receiver,args = (client,))
+    
+    receiver.start()
+    sender.start()
     audio_recv.start()
+    audio_send.start()
+    
 
     client.app.showSubWindow("Panel de la llamada")
 
@@ -329,7 +333,7 @@ def video_receiver(client):
     tiempo_ultimo_paquete=0
     reproduction_fps=24
     fps_enviados_segundo=0
-    
+   
 
     #receiverSocket.listen()
     #conn, addr = receiverSocket.accept()
@@ -417,6 +421,8 @@ def video_receiver(client):
                     
                     control_time += 1/reproduction_fps
                     frame=buffer_circular[0][2]
+                    id_ultimo_paquete_reproducido= buffer_circular[0][0]
+                    client.timestamp_last_image = buffer_circular[0][1]
                     heapq.heappop(buffer_circular)
                
 
@@ -435,12 +441,14 @@ def video_receiver(client):
                     img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                     client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage') 
 
-                if diff >0.5:
+                if diff >2:
 
             
-                    while len(buffer_circular) > 0.5*reproduction_fps:
+                    while len(buffer_circular) > 2*reproduction_fps:
 
                         frame=buffer_circular[0][2]
+                        client.timestamp_last_image = buffer_circular[0][1]
+                        id_ultimo_paquete_reproducido= buffer_circular[0][0]
                         heapq.heappop(buffer_circular)
                 
 

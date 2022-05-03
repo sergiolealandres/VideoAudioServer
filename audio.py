@@ -1,38 +1,31 @@
 import threading
 import time
-import wave
+import heapq
 import pyaudio
 import socket
-import queue
 
-CHUNK = 10*1024
+CHUNK = 5*1024
 FORMAT = pyaudio.paInt16
 CHANNELS = 2
 RATE = 44100
 BUFF_SIZE = 65536
 PORT = 8000
+MAX_DESYNCRONIZATION = 0.3
+MAX_BUFF = 3000
 
 p = pyaudio.PyAudio()
 def audio_sender(client):
     global p
-    print("Entramos audio sender")
     audio_send_socket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     audio_send_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     audio_send_socket.setsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF,BUFF_SIZE)
     order_num=0
-    #CHUNK = 10*1024
-    print("Before pyaudio send")
-    #time.sleep(1)
-    #p = pyaudio.PyAudio()
     
-    print("Before stream sender")
     stream = p.open(format=FORMAT,
                 channels=CHANNELS,
                 rate=RATE,
                 input=True,
                 frames_per_buffer=CHUNK)
-    print("After stream sender")
-
     data = None
     
     while client.end_call == 0 and client.app.alive:
@@ -52,7 +45,7 @@ def audio_sender(client):
             print("Error")
             time.sleep(0.1)
             continue
-        print("data", len(data))
+        #print("data", len(data))
 
         header=str(order_num)+'#'+str(time.time())+'#'
         order_num+=1
@@ -65,8 +58,8 @@ def audio_sender(client):
 
 def audio_receiver(client):
     global p
-    print("Entramos audio receiver")
-
+    id_ultimo_paquete_reproducido = 0
+    buffer_circular=[]
     audio_receiver_socket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     audio_receiver_socket.setsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF,BUFF_SIZE)
 
@@ -78,7 +71,7 @@ def audio_receiver(client):
                 rate=RATE,
                 output=True,
                 frames_per_buffer=CHUNK)
-                
+        
     # create socket
 
     while client.end_call == 0 and client.app.alive:
@@ -89,12 +82,42 @@ def audio_receiver(client):
                 print("No ha llegado audio")
                 continue
             data=data.split(b'#')
-            
-            order_num, timestamp =data[0], data[1]
-            frame=b"#".join(data[2:])
            
-            print("frame1",len(frame))
-            stream_output.write(frame)
+            order_num, timestamp = data[0], data[1]
+            order_num = int(order_num.decode('utf-8'))
+            timestamp=float(timestamp.decode('utf-8'))
+            frame=b"#".join(data[2:])
+            if order_num < id_ultimo_paquete_reproducido:
+                continue
+            
+            #stream_output.write(frame)
+            
+
+            heapq.heappush(buffer_circular, (order_num,timestamp, frame))
+
+            #Sincronización audio, video
+            if len(buffer_circular) > 0:
+                first_timestamp = buffer_circular[0][1]
+                diff = client.timestamp_last_image - first_timestamp
+                print("TIEMPOS VIDEO: ",diff)
+                if(abs(diff) < MAX_DESYNCRONIZATION):
+                    frame = buffer_circular[0][2]
+                    heapq.heappop(buffer_circular)
+                    stream_output.write(frame)
+                elif diff > MAX_DESYNCRONIZATION:
+                    while(len(buffer_circular) > 0):
+                        first_timestamp = buffer_circular[0][1]
+                        frame = buffer_circular[0][2]
+                        stream_output.write(frame)
+                        heapq.heappop(buffer_circular)
+                        if(client.timestamp_last_image - first_timestamp < MAX_DESYNCRONIZATION):
+                            break
+                else:
+                    if len(buffer_circular) > MAX_BUFF:
+                        print("Se recibe audio pero no vídeo. Overflow buffer audio")
+                
+
+            
         else:
             
             #clean the buffer
