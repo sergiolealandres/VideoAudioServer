@@ -10,7 +10,7 @@ CHANNELS = 2
 RATE = 44100
 BUFF_SIZE = 65536
 PORT = 8000
-MAX_DESYNCRONIZATION = 0.3
+MAX_DESYNCRONIZATION = 0.2
 MAX_BUFF = 3000
 
 p = pyaudio.PyAudio()
@@ -79,7 +79,7 @@ def audio_receiver(client):
             try:
                 data,_= audio_receiver_socket.recvfrom(BUFF_SIZE)
             except socket.timeout:
-                print("No ha llegado audio")
+                #print("No ha llegado audio")
                 continue
             data=data.split(b'#')
            

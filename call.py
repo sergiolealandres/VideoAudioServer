@@ -1,6 +1,8 @@
 from email import message
+from glob import glob
 import heapq
 from multiprocessing import Semaphore
+import random
 import socket
 import threading
 import pickle
@@ -10,22 +12,32 @@ import struct
 import base64
 import numpy as np
 from time import sleep
+from cifrado import *
 from conexion_servidor import *
 from PIL import Image, ImageTk
 from audio import *
 from concurrent.futures import ThreadPoolExecutor
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import *
 
 
 current_call = 0
 callSocket = None
 MIN_FPS = 8
+p, g, x, private, y, key=0,0,0,0,0,0
 
 
 
 def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
     global current_call
     global callSocket
-    #global connectionSocket
+    global p
+    global g
+    global x
+    global private
+    global y
+    global key
+    
     serverName = target_IP
     serverPort = target_port
 
@@ -50,6 +62,11 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
         return
 
     sentence = "CALLING "+ client.my_nick + " "+ str(client.my_data_port)
+    if client.cipher==True:
+
+        p, g, x, private = generate_keys()
+        sentence+=" "+ str(p) + " " + str(g) + " " + str(x)
+
     callSocket.send(sentence.encode())
     callSocket.settimeout(20)
     try:
@@ -61,8 +78,23 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
         return
     
     if sentence[:13] == "CALL_ACCEPTED":
-        print("prelock call")
+        
+
         splitted=sentence.split(" ")
+
+        if client.cipher==True:
+
+            if len(splitted)==4:
+                y = int(splitted[3])
+                key = generate_cipher_key(y,private,p)
+                print("MI CLAVE ES", key)
+                key = key.to_bytes(16, "little")
+                client.cifrador=AES.new(key, AES.MODE_ECB)
+
+            else:
+                client.cipher=False
+            
+
 
         if splitted[1]!=target_nick:
             client.app.infoBox("Error", "Los nicks no coinciden")
@@ -83,6 +115,7 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
 
         
         client.selected_data_port=splitted[2]
+        client.selected_nick=splitted[1]
         data= query(splitted[1])
         nick, ip, control_port, versions=data
 
@@ -103,7 +136,12 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
 
 def call_waiter(user_Port,client,semaforo):
     global current_call
-    
+    global p
+    global g
+    global x
+    global private
+    global y
+    global key
 
 
     waitingSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -152,7 +190,7 @@ def call_waiter(user_Port,client,semaforo):
             if current_call_value == 1:
                 connectionSocket.send("CALL_BUSY".encode())
                 connectionSocket.close()
-                #if client.ask_call(words[1]):
+                
             else:
                 client.app.setLabel("Nick entrante", words[1] + " te esta llamando...")
 
@@ -176,12 +214,28 @@ def call_waiter(user_Port,client,semaforo):
                     semaforo.release()
                     client.selected_data_port=words[2]
                     data=query(words[1])
-                    nick, ip, control_port, versions=data
+                    client.selected_nick, ip, control_port, versions=data
+
+                    if "V1" in versions and len(words)==6:
+                        client.cipher=True
+                        p,g,x = int(words[3]), int(words[4]), int(words[5])
+                        y,private=generate_keys_receiver(p,g)
+                        key = generate_cipher_key(x,private,p)
+                        print("MI CLAVE ES", key)
+                        key = key.to_bytes(16, "little")
+                        client.cifrador=AES.new(key, AES.MODE_ECB)
+                        
+
+
                     client.selected_control_port=control_port
 
                     client.selected_ip=ip
 
                     mensaje = "CALL_ACCEPTED "+client.my_nick+" "+client.my_data_port
+
+                    if client.cipher==True:
+
+                        mensaje += " " + str(y)
                     
                     connectionSocket.send(mensaje.encode())
                     
@@ -211,6 +265,19 @@ def call_waiter(user_Port,client,semaforo):
             current_call = 1
             semaforo.release()
 
+            if client.cipher==True:
+
+                if len(splitted)==4:
+
+                    y = splitted[3]
+                    key = generate_cipher_key(y,private,p)
+                    print("MI CLAVE ES", key)
+                    key = key.to_bytes(16, "little")
+                    client.cifrador=AES.new(key, AES.MODE_ECB)
+                
+                else:
+
+                    client.cipher=False
 
             
             client.selected_data_port=splitted[2]
@@ -298,9 +365,16 @@ def manage_call(client,connectionSocket):
             client.audio_receiver_event.set()
             
             
-        else:
-            print("Se ha recibido algo que no es")
-            
+        elif sentence[:7]=="MESSAGE":
+
+            print(client.selected_nick)
+            print("eeeee")
+            texto=client.selected_nick+": "+sentence[8:]+"\n\n"
+            print(texto)
+            print("eeeee")
+            client.app.setTextArea("Chat", texto, end=True, callFunction=False)
+            #client.app.setMessage("Chat", client.chat)
+
     
     client.semaforo.acquire()
     current_call = 0
@@ -321,7 +395,8 @@ def manage_call(client,connectionSocket):
 
 
 def video_receiver(client):
-    
+
+
     
     frame = None
     resolucion = None
@@ -350,9 +425,16 @@ def video_receiver(client):
                 try:
                     data,_ = receiverSocket.recvfrom(60000)
                 except socket.timeout:
-                    print("No llega")
+                    #print("No llega")
                     continue
+                
 
+                if client.cipher==True:
+
+                    data=client.cifrador.decrypt(data)
+                    data=unpad(data, 16)
+
+                
                 data=data.split(b'#')
                 order_num, timestamp, resolucion, fps=data[0], data[1], data[2], data[3]
 
@@ -371,7 +453,7 @@ def video_receiver(client):
 
                 reproduction_fps=max(MIN_FPS,round(1/((0.8/reproduction_fps + time_diff*0.2))))
                 heapq.heappush(buffer_circular, (order_num,timestamp, frame))
-                print("llenando",len(buffer_circular),reproduction_fps)
+                #print("llenando",len(buffer_circular),reproduction_fps)
         return reproduction_fps,tiempo_ultimo_paquete
     
     reproduction_fps,tiempo_ultimo_paquete = llenar_buffer(buffer_circular,reproduction_fps)
@@ -389,14 +471,21 @@ def video_receiver(client):
                 #print("No llega")
                 continue
 
-            print("LEN DATA",len(data))
+            if client.cipher==True:
+
+                data=client.cifrador.decrypt(data)
+                data=unpad(data, 16)
+
             data=data.split(b'#')
+
+            if len(data)<=4:
+                call_end(client)
             
             order_num, timestamp, resolucion, fps=data[0], data[1], data[2], data[3]
             resolucion = resolucion.decode("utf-8")
             resolucion = resolucion.split("x")
             resolucion = (int(resolucion[0]),int(resolucion[1]))
-            print(resolucion)
+            
             real_data=b"#".join(data[4:])
             resolucion_own = (160,120)
             frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
@@ -414,7 +503,7 @@ def video_receiver(client):
             heapq.heappush(buffer_circular, (order_num,timestamp, frame))
             
             diff = time.time() - control_time - 1/reproduction_fps
-            print("fps: ",reproduction_fps,fps,len(buffer_circular),diff)
+            #print("fps: ",reproduction_fps,fps,len(buffer_circular),diff)
             if len(buffer_circular)>0:
                 if diff < 0:
                     continue
@@ -447,10 +536,10 @@ def video_receiver(client):
                     img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                     client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage') 
 
-                if diff >2:
+                if diff >0.5:
 
             
-                    while len(buffer_circular) > 2*reproduction_fps:
+                    while len(buffer_circular) > 0.5*reproduction_fps:
 
                         frame=buffer_circular[0][2]
                         client.timestamp_last_image = buffer_circular[0][1]
@@ -493,7 +582,7 @@ def video_receiver(client):
                 if(client.end_call == 0 and client.app.alive and client.call_hold is False):
                     buffer_circular = []
                     reproduction_fps,tiempo_ultimo_paquete = llenar_buffer(buffer_circular,reproduction_fps)
-                    print("buffer",len(buffer_circular))
+                    
                     if(len(buffer_circular)>0):
                         control_time=buffer_circular[0][1]
 
@@ -504,7 +593,7 @@ def video_receiver(client):
     receiverSocket.close()
 
 def video_sender(client):
-    
+
     fps_sending = 32
     senderSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     senderSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -544,20 +633,26 @@ def video_sender(client):
 
         # Send message length first
 
-        print("eooooooooooo", client.resolucion_sender_value, fps_sending)
+        
         header=str(order_num)+'#'+str(time.time())+'#'+client.resolucion_sender_value+"#"+str(fps_sending)+"#"
         order_num+=1
         header_bytes=bytes(header, 'utf-8')
 
-        #print(len(data))
-        #print(client.selected_ip, client.selected_data_port)
-        # Then data
-        #senderSocket.sendto(message_size + data,('localhost',8003))
+        paquete=header_bytes + data
+
+        if client.cipher==True:
+
+            paquete=pad(paquete, 16)
+            paquete=client.cifrador.encrypt(paquete)
+
+
         time_diff = time.time() - tiempo_inicio
         if time_diff < 1.0/fps_sending:
             time.sleep(1.0/fps_sending - time_diff)
         
-        senderSocket.sendto(header_bytes + data,(client.selected_ip,int(client.selected_data_port)))
+
+
+        senderSocket.sendto(paquete,(client.selected_ip,int(client.selected_data_port)))
     
     client.enviando.release()
     senderSocket.close()
@@ -607,4 +702,13 @@ def resetear_valores(client):
     client.searched_user=False
     client.app.setEntry("User\t\t", "")
     client.app.setLabel("UserInfo", "")
+    client.cipher=False
+    client.app.clearTextArea("Chat", False)
+
+def send_menssage(client, text):
+
+    global callSocket
+
+    mensaje = "MESSAGE "+text
+    callSocket.send(mensaje.encode())
 

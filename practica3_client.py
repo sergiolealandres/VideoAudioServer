@@ -29,9 +29,11 @@ class VideoClient(object):
 	resolucion_tuple = (640,480)
 	sender_tuple = (640,480)
 	searched_user=False
-
+	cipher = False
 	mute = False
 	deafen = False
+	cifrador=None
+	chat=""
 
 	def __init__(self, window_size):
 		s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -43,7 +45,7 @@ class VideoClient(object):
 		self.app = gui("Redes2 - P2P", window_size)
 		self.app.setGuiPadding(10,10)
 
-		# Preparación del interfaz
+		self.app.setSize(1000,800)
 		self.app.addLabel("title", "Cliente Multimedia P2P - Redes2 ")
 		self.app.addImage("video", "imgs/nocamera.gif")
 		self.app.setImageSize("video", 640, 480)
@@ -65,18 +67,22 @@ class VideoClient(object):
 		self.app.addImageButton("Aceptar",self.buttonsCallback,"icons/aceptar_llamada.png")
 		self.app.addButtons([ "Rechazar"], self.buttonsCallback)
 		self.app.stopSubWindow()
-
+		
 
 		self.app.startSubWindow("Panel de la llamada", modal=True)
 		self.app.setStretch("both")
 		self.app.setSticky("nesw")
 		self.app.addImage("Video mostrado", self.imagen_no_camera)
+		
+		self.app.addScrolledTextArea("Chat",0,1)
 		with self.app.tabbedFrame("Tabs llamada"):
 
 			with self.app.tab("Opciones de llamada"):
 				self.app.setFg("DarkBlue")
 				self.app.setBg("LightSkyBlue")
 				self.app.addButtons(["Colgar","Pausar", "Reanudar"],self.buttonsCallback)
+				self.app.addLabelEntry("msj")
+				self.app.addButton("Send", self.buttonsCallback)
 			
 			with self.app.tab("Opciones de Audio/Vídeo"):
 				self.app.setFg("DarkBlue")
@@ -252,6 +258,8 @@ class VideoClient(object):
 				return
 			
 			self.selected_nick, self.selected_ip, self.selected_control_port, self.selected_version = data
+			
+
 			self.selected_control_port=(self.selected_control_port)
 			self.app.setLabel("UserInfo", "Nick = " + nick + "\nIp = " +self.selected_ip + "\nPuerto de control = " + self.selected_control_port + "\nVersión = " + self.selected_version)
 			self.searched_user=True
@@ -270,10 +278,13 @@ class VideoClient(object):
 				self.app.infoBox("Error","Not valid control port")
 				return
 
+			if "V1" in self.selected_version:
+				self.cipher=True
+
 			
 			call(self.selected_nick, self.selected_ip, self.selected_control_port, self.my_ip, self.my_control_port, self.semaforo,self)
 
-			
+		
 		elif button == "LLamar al usuario seleccionado":
 
 			
@@ -420,6 +431,14 @@ class VideoClient(object):
 			else:
 				self.deafen = False
 				self.receiver_sender_event.set()
+
+		elif button == "Send":
+			texto=self.app.getEntry("msj")
+			texto_chat=self.my_nick+": "+texto+"\n\n"
+			self.app.setTextArea("Chat", texto_chat, end=True, callFunction=False)
+			#self.app.setMessage("Chat", self.chat)
+			send_menssage(self,texto)
+
 
 
 if __name__ == '__main__':
