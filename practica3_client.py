@@ -44,7 +44,7 @@ class VideoClient(object):
 		# Creamos una variable que contenga el GUI principal
 		self.app = gui("Redes2 - P2P", window_size)
 		self.app.setGuiPadding(10,10)
-
+		self.app.addLabelNumericEntry
 		self.app.setSize(1000,800)
 		self.app.addLabel("title", "Cliente Multimedia P2P - Redes2 ")
 		self.app.addImage("video", "imgs/nocamera.gif")
@@ -75,14 +75,16 @@ class VideoClient(object):
 		self.app.addImage("Video mostrado", self.imagen_no_camera)
 		
 		self.app.addScrolledTextArea("Chat",0,1)
+		self.app.addEntry("msj",1,1)
+		self.app.addButton("Send", self.buttonsCallback,2,1)
 		with self.app.tabbedFrame("Tabs llamada"):
 
 			with self.app.tab("Opciones de llamada"):
 				self.app.setFg("DarkBlue")
 				self.app.setBg("LightSkyBlue")
 				self.app.addButtons(["Colgar","Pausar", "Reanudar"],self.buttonsCallback)
-				self.app.addLabelEntry("msj")
-				self.app.addButton("Send", self.buttonsCallback)
+				
+				
 			
 			with self.app.tab("Opciones de Audio/Vídeo"):
 				self.app.setFg("DarkBlue")
@@ -116,7 +118,7 @@ class VideoClient(object):
 				self.app.setEntry("IP\t\t", self.local_IP)
 				self.app.setEntry("Protocolo\t\t", "V0")
 				self.app.setEntry("Puerto Control\t\t", "8080")
-				self.app.setEntry("Puerto Datos\t\t", "4444")
+				self.app.setEntry("Puerto Datos\t\t", "3333")
 			
 
 			with self.app.tab("SEARCH USER"):
@@ -438,6 +440,7 @@ class VideoClient(object):
 			self.app.setTextArea("Chat", texto_chat, end=True, callFunction=False)
 			#self.app.setMessage("Chat", self.chat)
 			send_menssage(self,texto)
+			self.app.clearEntry("msj")
 
 
 

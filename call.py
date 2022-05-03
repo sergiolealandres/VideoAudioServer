@@ -641,7 +641,7 @@ def video_sender(client):
         paquete=header_bytes + data
 
         if client.cipher==True:
-
+            print("CIFRO")
             paquete=pad(paquete, 16)
             paquete=client.cifrador.encrypt(paquete)
 
