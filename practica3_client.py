@@ -16,12 +16,6 @@ class VideoClient(object):
 	camera_conected=0
 	semaforo=threading.Lock()
 	my_nick, my_ip, my_control_port, my_data_port, my_versions=None,None,None,None,None
-	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-	s.connect(("8.8.8.8", 80))
-	local_IP = s.getsockname()[0]
-	s.close()
-	local_IP = ni.ifaddresses('tun0')[ni.AF_INET][0]['addr']
-
 	imagen_no_camera="imgs/nocamera.gif"
 	accepted_call=0
 	resolucion = "640x480"
@@ -36,8 +30,14 @@ class VideoClient(object):
 	sender_tuple = (640,480)
 	searched_user=False
 
+	mute = False
+	deafen = False
 
 	def __init__(self, window_size):
+		s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		s.connect(("8.8.8.8", 80))
+		self.local_IP = s.getsockname()[0]
+		s.close()
 		
 		# Creamos una variable que contenga el GUI principal
 		self.app = gui("Redes2 - P2P", window_size)
@@ -62,33 +62,35 @@ class VideoClient(object):
 
 		self.app.startSubWindow("LLamada entrante", title="Recepción de llamada", modal=True)
 		self.app.addLabel("Nick entrante", "")
-		self.app.addButtons(["Aceptar", "Rechazar"], self.buttonsCallback)
+		self.app.addImageButton("Aceptar",self.buttonsCallback,"icons/aceptar_llamada.png")
+		self.app.addButtons([ "Rechazar"], self.buttonsCallback)
 		self.app.stopSubWindow()
 
 
 		self.app.startSubWindow("Panel de la llamada", modal=True)
-		self.app.setSize(1000, 800)
+		self.app.setStretch("both")
+		self.app.setSticky("nesw")
 		self.app.addImage("Video mostrado", self.imagen_no_camera)
-		self.app.setImageSize("Video mostrado", 640, 480)
-		self.app.addButtons(["Colgar","Pausar", "Reanudar", "Webcam", "Video", "Resolución Baja","Resolución Media","Resolución Alta"], self.buttonsCallback)
+		with self.app.tabbedFrame("Tabs llamada"):
+
+			with self.app.tab("Opciones de llamada"):
+				self.app.setFg("DarkBlue")
+				self.app.setBg("LightSkyBlue")
+				self.app.addButtons(["Colgar","Pausar", "Reanudar"],self.buttonsCallback)
+			
+			with self.app.tab("Opciones de Audio/Vídeo"):
+				self.app.setFg("DarkBlue")
+				self.app.setBg("LightSkyBlue")
+				self.app.addButtons(["Webcam", "Video","Silenciar","Ensordecer"],self.buttonsCallback)
+			
+			with self.app.tab("Opciones de Resolución"):
+				self.app.setFg("DarkBlue")
+				self.app.setBg("LightSkyBlue")
+				self.app.setInPadding([20,20])
+				self.app.addButtons(["Resolución Baja","Resolución Media","Resolución Alta"],self.buttonsCallback)
 		
 		self.app.stopSubWindow()
-		'''
-		self.app.startSubWindow("Panel de registro", modal=True)
-		self.app.addLabelEntry("Nick\t\t", 0, 0)
-		self.app.addLabelSecretEntry("Contraseña\t", 1, 0)
-		self.app.addLabelEntry("IP\t\t", 2, 0)
-		self.app.addButton("IP VPN", self.buttonsCallback, 2,1)
-		self.app.addLabelEntry("Puerto Control\t\t", 3, 0)
-		self.app.addLabelEntry("Puerto Datos\t\t", 4, 0)
-		self.app.addLabelEntry("Protocolo\t\t", 5, 0)
-		self.app.addButtons(["Registrarse", "Clean"], self.buttonsCallback, 6, 0, 2)
-		self.app.setEntryFocus("Nick\t\t")
-		self.app.setEntry("IP\t\t", self.local_IP)
-		self.app.setEntry("Protocolo\t\t", "V0")
-		self.app.setEntry("Puerto Control\t\t", "8080")
-		self.app.setEntry("Puerto Datos\t\t", "4444")
-		'''
+		
 		with self.app.tabbedFrame("Tabs"):
 		# Tab para registrarse.
 			
@@ -348,7 +350,7 @@ class VideoClient(object):
 
 
 		elif button == 'Video':
-
+			self.app.setOnTop(stay=True)
 			fichero= self.app.openBox(title=None, dirName="imgs", fileTypes=None, asFile=False, parent=None, multiple=False, mode='r')
 
 			if fichero is None:
@@ -405,6 +407,19 @@ class VideoClient(object):
 			self.resolucion_sender_value="640x480"
 			self.sender_tuple = (640,480)
 			
+		
+		elif button == "Silenciar":
+			if(self.mute is False):
+				self.mute = True
+			else:
+				self.mute = False
+				self.audio_sender_event.set()
+		elif button == "Ensordecer":
+			if(self.deafen is False):
+				self.deafen = True
+			else:
+				self.deafen = False
+				self.receiver_sender_event.set()
 
 
 if __name__ == '__main__':
