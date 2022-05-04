@@ -231,6 +231,21 @@ class VideoClient(object):
 				self.app.infoBox("Error","Not valid data port")
 				self.buttonsCallback("Clean")
 				return
+			
+			checkSocket = socket.socket(socket. AF_INET, socket. SOCK_STREAM)
+			location = (self.my_ip, int(self.my_data_port))
+			resultCheck = checkSocket.connect_ex(location)
+			location = (self.my_ip, int(self.my_data_port)-1)
+			resultCheck_audio = checkSocket.connect_ex(location)
+			checkSocket.close()
+			if resultCheck == 0 or resultCheck_audio==0:
+				self.app.infoBox("Error",
+									"Selecciona otro puerto de datos, alguien está usando el "\
+										+self.my_data_port+ " o bien el "+str(int(self.my_my_data_port)-1))
+				
+				return
+
+			
 
 			if register(self.my_nick, self.my_ip, self.my_control_port, password, self.my_versions)==False:
 
@@ -280,6 +295,10 @@ class VideoClient(object):
 				self.app.infoBox("Error","Not valid control port")
 				return
 
+			if dont_call_myself(self)==True:
+				self.app.infoBox("Error","No puedes llamarte a ti mismo")
+				return
+
 			if "V1" in self.selected_version:
 				self.cipher=True
 
@@ -316,7 +335,11 @@ class VideoClient(object):
 			if dont_call_myself(self)==True:
 				self.app.infoBox("Error","No puedes llamarte a ti mismo")
 				return
-			self.searched_user=True
+			
+
+			if "V1" in self.selected_version:
+				self.cipher=True
+
 			call(self.selected_nick, self.selected_ip, self.selected_control_port, self.my_ip, self.my_control_port, self.semaforo,self)
 			
 
@@ -364,7 +387,10 @@ class VideoClient(object):
 
 		elif button == 'Video':
 			self.app.setOnTop(stay=True)
-			fichero= self.app.openBox(title=None, dirName="imgs", fileTypes=None, asFile=False, parent=None, multiple=False, mode='r')
+			fichero= self.app.openBox(title=None, dirName="imgs",fileTypes=[('video', '*.gif'),\
+				 ('video', '*.mp4'),('video', '*.avi'), ('video', '*.mkv'),('video', '*.flv'),\
+					  ('video', '*.mov'),('video', '*.divx'), ('video', '*.xvid'),('video', '*.rm'),\
+						   ('video', '*.wmv'),('video', '*.mpg')], asFile=False, parent=None, multiple=False, mode='r')
 
 			if fichero is None:
 				return

@@ -1,4 +1,5 @@
 from email import message
+import errno
 from glob import glob
 import heapq
 from multiprocessing import Semaphore
@@ -340,6 +341,10 @@ def manage_call(client,connectionSocket):
             sentence = callSocket.recv(1024)
         except socket.timeout:
             continue
+
+        
+        
+
         sentence = sentence.decode('utf-8')
         
         if sentence == '':
@@ -666,7 +671,11 @@ def call_end(client):
     
     message = 'CALL_END ' + client.my_nick
     message = bytes(message, 'utf-8')
-    callSocket.send(message)
+    try:
+        callSocket.send(message)
+    except IOError as e:
+        if e.errno == errno.EPIPE:
+            client.call_end=1
     client.end_call=1
     client.sender_event.set()
     client.receiver_event.set()
@@ -680,7 +689,12 @@ def parar_llamada(client):
     client.call_hold = True
     message = 'CALL_HOLD ' + client.my_nick
     message = bytes(message, 'utf-8')
-    callSocket.send(message)
+    try:
+        callSocket.send(message)
+        print("envio parar")
+    except IOError as e:
+        if e.errno == errno.EPIPE:
+            client.call_end=1
 
     
 def continuar_llamada(client):
@@ -688,7 +702,13 @@ def continuar_llamada(client):
     global callSocket
     message = 'CALL_RESUME ' + client.my_nick
     message = bytes(message, 'utf-8')
-    callSocket.send(message)
+    try:
+        callSocket.send(message)
+
+    except IOError as e:
+        if e.errno == errno.EPIPE:
+            client.call_end=1
+
     client.call_hold = False
     client.sender_event.set()
     client.receiver_event.set()
@@ -710,5 +730,10 @@ def send_menssage(client, text):
     global callSocket
 
     mensaje = "MESSAGE "+text
-    callSocket.send(mensaje.encode())
+    try:
+        callSocket.send(mensaje)
+
+    except IOError as e:
+        if e.errno == errno.EPIPE:
+            client.call_end=1
 
