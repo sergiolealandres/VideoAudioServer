@@ -350,7 +350,7 @@ def video_receiver(client):
                 try:
                     data,_ = receiverSocket.recvfrom(60000)
                 except socket.timeout:
-                    print("No llega")
+                    #print("No llega")
                     continue
 
                 data=data.split(b'#')
@@ -389,14 +389,14 @@ def video_receiver(client):
                 #print("No llega")
                 continue
 
-            print("LEN DATA",len(data))
+            #print("LEN DATA",len(data))
             data=data.split(b'#')
             
             order_num, timestamp, resolucion, fps=data[0], data[1], data[2], data[3]
             resolucion = resolucion.decode("utf-8")
             resolucion = resolucion.split("x")
             resolucion = (int(resolucion[0]),int(resolucion[1]))
-            print(resolucion)
+            #print(resolucion)
             real_data=b"#".join(data[4:])
             resolucion_own = (160,120)
             frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
@@ -433,6 +433,7 @@ def video_receiver(client):
                     frame=cv2.resize(frame, client.resolucion_tuple)
                     own_video = cv2.resize(own_video,resolucion_own)
                     frame_shown = frame
+                    print("Los shapes son ",frame.shape,own_video.shape)
                     frame_shown[0:own_video.shape[0],0:own_video.shape[1]] = own_video
                 else:
                     frame_shown = cv2.resize(frame, client.resolucion_tuple)
@@ -447,10 +448,10 @@ def video_receiver(client):
                     img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                     client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage') 
 
-                if diff >2:
+                if diff >0.5:
 
             
-                    while len(buffer_circular) > 2*reproduction_fps:
+                    while len(buffer_circular) > 0.5*reproduction_fps:
 
                         frame=buffer_circular[0][2]
                         client.timestamp_last_image = buffer_circular[0][1]
@@ -462,6 +463,7 @@ def video_receiver(client):
                         if own_video.size > 0:
                             frame_shown = cv2.resize(frame, client.resolucion_tuple)
                             own_video = cv2.resize(own_video,resolucion_own)
+                            print("Los shapes son ",frame_shown.shape,own_video.shape)
                             frame_shown[0:own_video.shape[0],0:own_video.shape[1]] = own_video
                         else:
                             frame_shown = cv2.resize(frame, client.resolucion_tuple)
@@ -493,7 +495,7 @@ def video_receiver(client):
                 if(client.end_call == 0 and client.app.alive and client.call_hold is False):
                     buffer_circular = []
                     reproduction_fps,tiempo_ultimo_paquete = llenar_buffer(buffer_circular,reproduction_fps)
-                    print("buffer",len(buffer_circular))
+                    #print("buffer",len(buffer_circular))
                     if(len(buffer_circular)>0):
                         control_time=buffer_circular[0][1]
 
@@ -544,7 +546,7 @@ def video_sender(client):
 
         # Send message length first
 
-        print("eooooooooooo", client.resolucion_sender_value, fps_sending)
+        #print("eooooooooooo", client.resolucion_sender_value, fps_sending)
         header=str(order_num)+'#'+str(time.time())+'#'+client.resolucion_sender_value+"#"+str(fps_sending)+"#"
         order_num+=1
         header_bytes=bytes(header, 'utf-8')

@@ -8,7 +8,22 @@ import cv2
 from conexion_servidor import *
 from verification import *
 import netifaces as ni
+import pyautogui
+from mss import mss
 
+class ScreenCapturer(object):
+	sct = mss()
+	def read(self):
+		print("TIempo antes",time.time())
+		monitor = self.sct.monitors[1]
+		sct_img = self.sct.grab(monitor)
+		print("Tiempo despues",time.time())
+		return True, np.array(Image.frombytes('RGB', sct_img.size, sct_img.bgra, 'raw', 'BGRX'))
+	def set(self,arg1,arg2):
+		return
+	def release(self):
+		self.sct = None
+		return
 
 class VideoClient(object):
 
@@ -42,6 +57,7 @@ class VideoClient(object):
 		# Creamos una variable que contenga el GUI principal
 		self.app = gui("Redes2 - P2P", window_size)
 		self.app.setGuiPadding(10,10)
+		self.app.setSize(1000,800)
 
 		# Preparación del interfaz
 		self.app.addLabel("title", "Cliente Multimedia P2P - Redes2 ")
@@ -81,7 +97,7 @@ class VideoClient(object):
 			with self.app.tab("Opciones de Audio/Vídeo"):
 				self.app.setFg("DarkBlue")
 				self.app.setBg("LightSkyBlue")
-				self.app.addButtons(["Webcam", "Video","Silenciar","Ensordecer"],self.buttonsCallback)
+				self.app.addButtons(["Webcam", "Video","Capturar Pantalla","Silenciar","Ensordecer"],self.buttonsCallback)
 			
 			with self.app.tab("Opciones de Resolución"):
 				self.app.setFg("DarkBlue")
@@ -348,6 +364,10 @@ class VideoClient(object):
 			self.video_mostrado=0
 			self.enviando =cv2.VideoCapture(0)
 
+		elif button == 'Capturar Pantalla':
+
+			self.enviando = ScreenCapturer()
+
 
 		elif button == 'Video':
 			self.app.setOnTop(stay=True)
@@ -435,4 +455,5 @@ if __name__ == '__main__':
 	# El control ya NO vuelve de esta función, por lo que todas las
 	# acciones deberán ser gestionadas desde callbacks y threads
 	vc.start()
+
 
