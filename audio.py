@@ -4,7 +4,7 @@ import heapq
 import pyaudio
 import socket
 
-CHUNK = 5*1024
+CHUNK = 1024
 FORMAT = pyaudio.paInt16
 CHANNELS = 2
 RATE = 44100
@@ -71,6 +71,10 @@ def audio_receiver(client):
                 rate=RATE,
                 output=True,
                 frames_per_buffer=CHUNK)
+    
+    def callback(in_data,frame_count,time_info,status):
+        global client
+
         
     # create socket
 
@@ -100,18 +104,28 @@ def audio_receiver(client):
                 first_timestamp = buffer_circular[0][1]
                 diff = client.timestamp_last_image - first_timestamp
                 print("TIEMPOS VIDEO: ",diff)
-                if(abs(diff) < MAX_DESYNCRONIZATION):
+                if(diff > -1*MAX_DESYNCRONIZATION and diff < 0):
                     frame = buffer_circular[0][2]
                     heapq.heappop(buffer_circular)
                     stream_output.write(frame)
-                elif diff > MAX_DESYNCRONIZATION:
+                    """elif diff > 0:
+                        while(len(buffer_circular) > 0):
+                            first_timestamp = buffer_circular[0][1]
+                            frame = buffer_circular[0][2]
+                            stream_output.write(frame)
+                            heapq.heappop(buffer_circular)
+                            if(client.timestamp_last_image - first_timestamp < 0):
+                                break"""
+                elif diff > 0:
                     while(len(buffer_circular) > 0):
                         first_timestamp = buffer_circular[0][1]
-                        frame = buffer_circular[0][2]
-                        stream_output.write(frame)
-                        heapq.heappop(buffer_circular)
-                        if(client.timestamp_last_image - first_timestamp < MAX_DESYNCRONIZATION):
+                       
+                        if(client.timestamp_last_image - first_timestamp < 0):
+                            frame = buffer_circular[0][2]
+                            stream_output.write(frame)
+                            heapq.heappop(buffer_circular)
                             break
+                        heapq.heappop(buffer_circular)
                 else:
                     if len(buffer_circular) > MAX_BUFF:
                         print("Se recibe audio pero no vídeo. Overflow buffer audio")
@@ -119,7 +133,7 @@ def audio_receiver(client):
 
             
         else:
-            
+            buffer_circular = []
             #clean the buffer
             while client.end_call == 0 and client.app.alive and client.call_hold is True:
                 try:

@@ -247,6 +247,7 @@ def manage_call(client,connectionSocket):
     client.receiver_event = threading.Event()
     client.audio_sender_event = threading.Event()
     client.audio_receiver_event = threading.Event()
+    client.call_time = time.time()
 
     client.call_hold = False
     client.current_frame = np.array([])
@@ -381,7 +382,15 @@ def video_receiver(client):
 
 
     while client.end_call == 0 and client.app.alive:
+        #Set the status bar time
+        client.app.setStatusbar("Time: "+str(time.time()-client.call_time),0)
+        
+
         if client.call_hold is False:
+            #Set the status bar fps
+            client.app.setStatusbar("Fps: "+str(reproduction_fps),1)
+
+
             # Retrieve message size
             try:
                 data,_ = receiverSocket.recvfrom(60000)
@@ -433,7 +442,7 @@ def video_receiver(client):
                     frame=cv2.resize(frame, client.resolucion_tuple)
                     own_video = cv2.resize(own_video,resolucion_own)
                     frame_shown = frame
-                    print("Los shapes son ",frame.shape,own_video.shape)
+                    #print("Los shapes son ",frame.shape,own_video.shape)
                     frame_shown[0:own_video.shape[0],0:own_video.shape[1]] = own_video
                 else:
                     frame_shown = cv2.resize(frame, client.resolucion_tuple)
@@ -448,10 +457,10 @@ def video_receiver(client):
                     img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                     client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage') 
 
-                if diff >0.5:
+                if diff >2:
 
             
-                    while len(buffer_circular) > 0.5*reproduction_fps:
+                    while len(buffer_circular) > 2*reproduction_fps:
 
                         frame=buffer_circular[0][2]
                         client.timestamp_last_image = buffer_circular[0][1]
@@ -463,7 +472,7 @@ def video_receiver(client):
                         if own_video.size > 0:
                             frame_shown = cv2.resize(frame, client.resolucion_tuple)
                             own_video = cv2.resize(own_video,resolucion_own)
-                            print("Los shapes son ",frame_shown.shape,own_video.shape)
+                            #print("Los shapes son ",frame_shown.shape,own_video.shape)
                             frame_shown[0:own_video.shape[0],0:own_video.shape[1]] = own_video
                         else:
                             frame_shown = cv2.resize(frame, client.resolucion_tuple)
@@ -475,7 +484,8 @@ def video_receiver(client):
                             client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage')
 
                     control_time=buffer_circular[0][1]
-
+                
+                
 
 
         else:
@@ -609,4 +619,6 @@ def resetear_valores(client):
     client.searched_user=False
     client.app.setEntry("User\t\t", "")
     client.app.setLabel("UserInfo", "")
+    client.app.setStatusbar("Time: 0",0)
+    client.app.setStatusbar("FPS: 0",1)
 

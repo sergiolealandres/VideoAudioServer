@@ -104,7 +104,9 @@ class VideoClient(object):
 				self.app.setBg("LightSkyBlue")
 				self.app.setInPadding([20,20])
 				self.app.addButtons(["Resolución Baja","Resolución Media","Resolución Alta"],self.buttonsCallback)
-		
+		self.app.addStatusbar(fields=2)
+		self.app.setStatusbar("Time: 0", 0)
+		self.app.setStatusbar("Fps: 0", 1)
 		self.app.stopSubWindow()
 		
 		with self.app.tabbedFrame("Tabs"):
