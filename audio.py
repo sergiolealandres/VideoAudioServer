@@ -114,7 +114,7 @@ def audio_receiver(client):
             if len(buffer_circular) > 0:
                 first_timestamp = buffer_circular[0][1]
                 diff = client.timestamp_last_image - first_timestamp
-                print("TIEMPOS VIDEO: ",diff)
+                #print("TIEMPOS VIDEO: ",diff)
                 if(diff > -1*MAX_DESYNCRONIZATION and diff < 0):
                     frame = buffer_circular[0][2]
                     heapq.heappop(buffer_circular)

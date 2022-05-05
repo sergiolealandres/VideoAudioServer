@@ -29,7 +29,7 @@ p, g, x, private, y, key=0,0,0,0,0,0
 
 
 
-def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
+def call_user(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
     global current_call
     global callSocket
     global p
@@ -76,7 +76,8 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
         print(sentence)
     except socket.timeout:
         client.app.infoBox("Error", "El usuario " + target_nick + " no ha contestado")
-        
+        resetear_valores(client)
+        callSocket.close()
         return
     
     if sentence[:13] == "CALL_ACCEPTED":
@@ -346,13 +347,12 @@ def manage_call(client,connectionSocket):
         except socket.timeout:
             continue
 
-        
-        
-
         sentence = sentence.decode('utf-8')
         
         if sentence == '':
-            continue
+            print("desconexión")
+            client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
+            call_end(client)
         print("Se ha recibido:")
         print(sentence)
         print("")
@@ -381,8 +381,10 @@ def manage_call(client,connectionSocket):
             texto=client.selected_nick+": "+sentence[8:]+"\n\n"
             print(texto)
             print("eeeee")
-            client.app.setTextArea("Chat", texto, end=True, callFunction=False)
-            #client.app.setMessage("Chat", client.chat)
+            
+            client.chat.append(texto)
+            client.app.updateListBox("Chat", client.chat)
+            
 
     
     client.semaforo.acquire()
@@ -405,8 +407,6 @@ def manage_call(client,connectionSocket):
 
 def video_receiver(client):
 
-
-    
     frame = None
     resolucion = None
     receiverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -419,12 +419,13 @@ def video_receiver(client):
     except OSError:
 
         client.app.infoBox("Error", "Hay otro usuario con esta misma IP utilizando el puerto"+ str(client.my_data_port))
+        client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
         call_end(client)
         receiverSocket.close()
         return
             
 
-    receiverSocket.settimeout(0.1)
+    receiverSocket.settimeout(10)
     buffer_circular=[]
     id_ultimo_paquete_reproducido=0
     tiempo_ultimo_paquete=0
@@ -446,9 +447,11 @@ def video_receiver(client):
                 try:
                     data,_ = receiverSocket.recvfrom(60000)
                 except socket.timeout:
-                    #print("No llega")
-                    continue
-                
+                    if client.call_hold==False:
+                        client.app.infoBox("Info", "Hemos cerrado la llamada ya que el usuario está incativo")
+                        client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
+                        call_end(client)
+                        break
 
                 if client.cipher==True:
 
@@ -497,8 +500,10 @@ def video_receiver(client):
             try:
                 data,_ = receiverSocket.recvfrom(60000)
             except socket.timeout:
-                #print("No llega")
-                continue
+                if client.call_hold==False:
+                    client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
+                    call_end(client)
+                    break
 
             if client.cipher==True:
 
@@ -508,12 +513,16 @@ def video_receiver(client):
             data=data.split(b'#')
 
             if len(data)<=4:
+                client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
                 call_end(client)
+                
+                client.app.infoBox("Error", "Hemos cerrado la llamada porque se están recibiendo frames sin cabecera \
+                    o con un formato incorrecto de esta")
             
             order_num, timestamp, resolucion, fps=data[0], data[1], data[2], data[3]
             resolucion = resolucion.decode("utf-8")
             resolucion = resolucion.split("x")
-            resolucion = (int(resolucion[0]),int(resolucion[1]))
+            
             
             real_data=b"#".join(data[4:])
             resolucion_own = (160,120)
@@ -529,7 +538,7 @@ def video_receiver(client):
             tiempo_ultimo_paquete = tiempo
             reproduction_fps=max(MIN_FPS,round(1/((0.8/reproduction_fps + time_diff*0.2))))
            
-            heapq.heappush(buffer_circular, (order_num,timestamp, frame))
+            heapq.heappush(buffer_circular, (order_num, timestamp, frame))
             
             diff = time.time() - control_time - 1/reproduction_fps
             #print("fps: ",reproduction_fps,fps,len(buffer_circular),diff)
@@ -603,8 +612,10 @@ def video_receiver(client):
                 try:
                     _,_ = receiverSocket.recvfrom(60000)
                 except socket.timeout:
-                    #print("No llega")
-                    break
+                    if client.call_hold==False:
+                        client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
+                        call_end(client)
+                        break
             
             print("CAAAAAAAAAAAAAAAAAAAALlllllllllllll HHHHHHHHHHHHHHHHOOOOOOOOOOOOOOOOOOLLLLLLLLLLLLLLLD")
             #wait until resume
@@ -620,7 +631,7 @@ def video_receiver(client):
 
         
 
-    client.app.setImage("Video mostrado", client.imagen_no_camera)
+    #client.app.setImage("Video mostrado", client.imagen_no_camera)
     print("termino de recibir video")
     receiverSocket.close()
 
@@ -650,6 +661,7 @@ def video_sender(client):
                   
             client.enviando.set(cv2.CAP_PROP_POS_FRAMES, 0)
             ret, frame = client.enviando.read()
+
         if frame is None:
             continue
 
@@ -673,7 +685,7 @@ def video_sender(client):
         paquete=header_bytes + data
 
         if client.cipher==True:
-            print("CIFRO")
+            #print("CIFRO")
             paquete=pad(paquete, 16)
             paquete=client.cifrador.encrypt(paquete)
 
@@ -693,8 +705,6 @@ def video_sender(client):
 def call_end(client):
     global current_call
     global callSocket
-    
-    client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
     
     message = 'CALL_END ' + client.my_nick
     message = bytes(message, 'utf-8')
@@ -752,7 +762,9 @@ def resetear_valores(client):
     client.app.setStatusbar("Time: 0",0)
     client.app.setStatusbar("FPS: 0",1)
     client.cipher=False
-    client.app.clearTextArea("Chat", False)
+    client.chat=[]
+    client.app.updateListBox("Chat", client.chat)
+    client.video_mostrado="imgs/video_por_defecto.gif"
 
 def send_menssage(client, text):
 
