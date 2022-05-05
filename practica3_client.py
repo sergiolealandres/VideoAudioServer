@@ -4,6 +4,7 @@ import threading
 from appJar import gui
 from PIL import Image, ImageTk
 from call import *
+import call
 import cv2
 from conexion_servidor import *
 from verification import *
@@ -35,7 +36,7 @@ class VideoClient(object):
 	accepted_call=0
 	resolucion = "640x480"
 	video_para_mostrar="imgs/video_por_defecto.gif"
-	video_mostrado=0
+	video_mostrado="imgs/video_por_defecto.gif"
 	enviando=None
 	stop_sending_video=False
 	event_call=threading.Event()
@@ -48,7 +49,9 @@ class VideoClient(object):
 	mute = False
 	deafen = False
 	cifrador=None
-	chat=""
+	chat=[]
+	
+
 
 	def __init__(self, window_size):
 		s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -60,7 +63,7 @@ class VideoClient(object):
 		self.app = gui("Redes2 - P2P", window_size)
 		self.app.setGuiPadding(10,10)
 		self.app.setSize(1000,800)
-
+		self.app.setStopFunction(self.stop_function)
 		# Preparación del interfaz
 		self.app.addLabel("title", "Cliente Multimedia P2P - Redes2 ")
 		self.app.addImage("video", "imgs/nocamera.gif")
@@ -88,9 +91,10 @@ class VideoClient(object):
 		self.app.startSubWindow("Panel de la llamada", modal=True)
 		self.app.setStretch("both")
 		self.app.setSticky("nesw")
+		self.app.setStopFunction(self.stop_function)
 		self.app.addImage("Video mostrado", self.imagen_no_camera)
 		
-		self.app.addScrolledTextArea("Chat",0,1)
+		self.app.addListBox("Chat",self.chat,0,1)
 		self.app.addEntry("msj",1,1)
 		self.app.addButton("Send", self.buttonsCallback,2,1)
 		with self.app.tabbedFrame("Tabs llamada"):
@@ -134,7 +138,7 @@ class VideoClient(object):
 				self.app.setEntryFocus("Nick\t\t")
 				# Pone default values.
 				self.app.setEntry("IP\t\t", self.local_IP)
-				self.app.setEntry("Protocolo\t\t", "V0")
+				self.app.setEntry("Protocolo\t\t", "V0#V1")
 				self.app.setEntry("Puerto Control\t\t", "8080")
 				self.app.setEntry("Puerto Datos\t\t", "3333")
 			
@@ -163,7 +167,7 @@ class VideoClient(object):
 
 		self.app.setTabbedFrameDisabledTab("Tabs", "LIST USERS")
 		self.app.setTabbedFrameDisabledTab("Tabs", "SEARCH USER")
-		self.app.addStatusbar(fields=2)
+		
 
 	def start(self):
 		self.app.go()
@@ -187,6 +191,14 @@ class VideoClient(object):
 
 		# Aquí tendría que el código que envia el frame a la red
 		# ...
+
+
+	def stop_function(self):
+		
+		if call.current_call==1:
+			
+			call_end(self)
+		return True
 
 	# Establece la resolución de la imagen capturada
 	def setImageResolution(self, resolution):		
@@ -270,8 +282,6 @@ class VideoClient(object):
 				self.app.infoBox("Error","Wrong Password")
 				return
 
-			
-			
 			self.app.setTabbedFrameDisabledTab("Tabs", "LIST USERS", False)
 			self.app.setTabbedFrameDisabledTab("Tabs", "SEARCH USER", False)
 			thr = threading.Thread(target=call_waiter,args = (self.my_control_port, self, self.semaforo))
@@ -317,11 +327,15 @@ class VideoClient(object):
 				self.app.infoBox("Error","No puedes llamarte a ti mismo")
 				return
 
+			if "V0" not in self.selected_version and "V1" not in self.selected_version:
+				self.app.infoBox("Error","El usuario no soporta ni la V0 ni la V1")
+				return
+
 			if "V1" in self.selected_version:
 				self.cipher=True
 
 			
-			call(self.selected_nick, self.selected_ip, self.selected_control_port, self.my_ip, self.my_control_port, self.semaforo,self)
+			call_user(self.selected_nick, self.selected_ip, self.selected_control_port, self.my_ip, self.my_control_port, self.semaforo,self)
 
 		
 		elif button == "LLamar al usuario seleccionado":
@@ -354,11 +368,14 @@ class VideoClient(object):
 				self.app.infoBox("Error","No puedes llamarte a ti mismo")
 				return
 			
+			if "V0" not in self.selected_version and "V1" not in self.selected_version:
+				self.app.infoBox("Error","El usuario no soporta ni la V0 ni la V1")
+				return
 
 			if "V1" in self.selected_version:
 				self.cipher=True
 
-			call(self.selected_nick, self.selected_ip, self.selected_control_port, self.my_ip, self.my_control_port, self.semaforo,self)
+			call_user(self.selected_nick, self.selected_ip, self.selected_control_port, self.my_ip, self.my_control_port, self.semaforo,self)
 			
 
 		elif button == 'Actualizar':
@@ -373,7 +390,7 @@ class VideoClient(object):
 			self.app.clearEntry("Nick\t\t")
 			self.app.clearEntry("Contraseña\t")
 			self.app.setEntry("IP\t\t", self.local_IP)
-			self.app.setEntry("Protocolo\t\t", "V0")
+			self.app.setEntry("Protocolo\t\t", "V0#V1")
 			self.app.setEntry("Puerto Control\t\t", "8080")
 			self.app.setEntry("Puerto Datos\t\t", "4444")
 			self.app.setEntryFocus("Nick\t\t")
@@ -400,7 +417,13 @@ class VideoClient(object):
 				return
 
 			self.video_mostrado=0
-			self.enviando =cv2.VideoCapture(0)
+			test =cv2.VideoCapture(0)
+			if test is None or not test.isOpened():
+				self.app.infoBox("Error","Ya está la cámara en uso")
+				return
+
+			self.enviando=test
+				
 
 		elif button == 'Capturar Pantalla':
 
@@ -414,8 +437,9 @@ class VideoClient(object):
 					  ('video', '*.mov'),('video', '*.divx'), ('video', '*.xvid'),('video', '*.rm'),\
 						   ('video', '*.wmv'),('video', '*.mpg')], asFile=False, parent=None, multiple=False, mode='r')
 
-			if fichero is None:
+			if len(fichero)==0:
 				return
+			
 
 			self.enviando = cv2.VideoCapture(fichero)
 
@@ -431,6 +455,7 @@ class VideoClient(object):
 			self.event_call.set()
 
 		elif button == "Colgar":
+			self.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
 			call_end(self)
 
 
@@ -485,8 +510,8 @@ class VideoClient(object):
 		elif button == "Send":
 			texto=self.app.getEntry("msj")
 			texto_chat=self.my_nick+": "+texto+"\n\n"
-			self.app.setTextArea("Chat", texto_chat, end=True, callFunction=False)
-			#self.app.setMessage("Chat", self.chat)
+			self.chat.append(texto_chat)
+			self.app.updateListBox("Chat", self.chat)
 			send_menssage(self,texto)
 			self.app.clearEntry("msj")
 
