@@ -1,5 +1,4 @@
 # import the library
-from ast import Call
 import threading
 from appJar import gui
 from PIL import Image, ImageTk
@@ -7,8 +6,6 @@ from call import *
 import cv2
 from conexion_servidor import *
 from verification import *
-import netifaces as ni
-import pyautogui
 from mss import mss
 
 class ScreenCapturer(object):
