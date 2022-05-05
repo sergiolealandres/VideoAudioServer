@@ -44,9 +44,11 @@ class VideoClient(object):
 	resolucion_tuple = (640,480)
 	sender_tuple = (640,480)
 	searched_user=False
-
+	cipher = False
 	mute = False
 	deafen = False
+	cifrador=None
+	chat=""
 
 	def __init__(self, window_size):
 		s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -81,18 +83,24 @@ class VideoClient(object):
 		self.app.addImageButton("Aceptar",self.buttonsCallback,"icons/aceptar_llamada.png")
 		self.app.addButtons([ "Rechazar"], self.buttonsCallback)
 		self.app.stopSubWindow()
-
+		
 
 		self.app.startSubWindow("Panel de la llamada", modal=True)
 		self.app.setStretch("both")
 		self.app.setSticky("nesw")
 		self.app.addImage("Video mostrado", self.imagen_no_camera)
+		
+		self.app.addScrolledTextArea("Chat",0,1)
+		self.app.addEntry("msj",1,1)
+		self.app.addButton("Send", self.buttonsCallback,2,1)
 		with self.app.tabbedFrame("Tabs llamada"):
 
 			with self.app.tab("Opciones de llamada"):
 				self.app.setFg("DarkBlue")
 				self.app.setBg("LightSkyBlue")
 				self.app.addButtons(["Colgar","Pausar", "Reanudar"],self.buttonsCallback)
+				
+				
 			
 			with self.app.tab("Opciones de Audio/Vídeo"):
 				self.app.setFg("DarkBlue")
@@ -128,7 +136,7 @@ class VideoClient(object):
 				self.app.setEntry("IP\t\t", self.local_IP)
 				self.app.setEntry("Protocolo\t\t", "V0")
 				self.app.setEntry("Puerto Control\t\t", "8080")
-				self.app.setEntry("Puerto Datos\t\t", "4444")
+				self.app.setEntry("Puerto Datos\t\t", "3333")
 			
 
 			with self.app.tab("SEARCH USER"):
@@ -241,6 +249,21 @@ class VideoClient(object):
 				self.app.infoBox("Error","Not valid data port")
 				self.buttonsCallback("Clean")
 				return
+			
+			checkSocket = socket.socket(socket. AF_INET, socket. SOCK_STREAM)
+			location = (self.my_ip, int(self.my_data_port))
+			resultCheck = checkSocket.connect_ex(location)
+			location = (self.my_ip, int(self.my_data_port)-1)
+			resultCheck_audio = checkSocket.connect_ex(location)
+			checkSocket.close()
+			if resultCheck == 0 or resultCheck_audio==0:
+				self.app.infoBox("Error",
+									"Selecciona otro puerto de datos, alguien está usando el "\
+										+self.my_data_port+ " o bien el "+str(int(self.my_my_data_port)-1))
+				
+				return
+
+			
 
 			if register(self.my_nick, self.my_ip, self.my_control_port, password, self.my_versions)==False:
 
@@ -270,6 +293,8 @@ class VideoClient(object):
 				return
 			
 			self.selected_nick, self.selected_ip, self.selected_control_port, self.selected_version = data
+			
+
 			self.selected_control_port=(self.selected_control_port)
 			self.app.setLabel("UserInfo", "Nick = " + nick + "\nIp = " +self.selected_ip + "\nPuerto de control = " + self.selected_control_port + "\nVersión = " + self.selected_version)
 			self.searched_user=True
@@ -288,10 +313,17 @@ class VideoClient(object):
 				self.app.infoBox("Error","Not valid control port")
 				return
 
+			if dont_call_myself(self)==True:
+				self.app.infoBox("Error","No puedes llamarte a ti mismo")
+				return
+
+			if "V1" in self.selected_version:
+				self.cipher=True
+
 			
 			call(self.selected_nick, self.selected_ip, self.selected_control_port, self.my_ip, self.my_control_port, self.semaforo,self)
 
-			
+		
 		elif button == "LLamar al usuario seleccionado":
 
 			
@@ -321,7 +353,11 @@ class VideoClient(object):
 			if dont_call_myself(self)==True:
 				self.app.infoBox("Error","No puedes llamarte a ti mismo")
 				return
-			self.searched_user=True
+			
+
+			if "V1" in self.selected_version:
+				self.cipher=True
+
 			call(self.selected_nick, self.selected_ip, self.selected_control_port, self.my_ip, self.my_control_port, self.semaforo,self)
 			
 
@@ -373,7 +409,10 @@ class VideoClient(object):
 
 		elif button == 'Video':
 			self.app.setOnTop(stay=True)
-			fichero= self.app.openBox(title=None, dirName="imgs", fileTypes=None, asFile=False, parent=None, multiple=False, mode='r')
+			fichero= self.app.openBox(title=None, dirName="imgs",fileTypes=[('video', '*.gif'),\
+				 ('video', '*.mp4'),('video', '*.avi'), ('video', '*.mkv'),('video', '*.flv'),\
+					  ('video', '*.mov'),('video', '*.divx'), ('video', '*.xvid'),('video', '*.rm'),\
+						   ('video', '*.wmv'),('video', '*.mpg')], asFile=False, parent=None, multiple=False, mode='r')
 
 			if fichero is None:
 				return
@@ -442,6 +481,15 @@ class VideoClient(object):
 			else:
 				self.deafen = False
 				self.receiver_sender_event.set()
+
+		elif button == "Send":
+			texto=self.app.getEntry("msj")
+			texto_chat=self.my_nick+": "+texto+"\n\n"
+			self.app.setTextArea("Chat", texto_chat, end=True, callFunction=False)
+			#self.app.setMessage("Chat", self.chat)
+			send_menssage(self,texto)
+			self.app.clearEntry("msj")
+
 
 
 if __name__ == '__main__':
