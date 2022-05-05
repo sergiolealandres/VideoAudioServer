@@ -81,8 +81,9 @@ class VideoClient(object):
 
 		self.app.startSubWindow("LLamada entrante", title="Recepción de llamada", modal=True)
 		self.app.addLabel("Nick entrante", "")
-		self.app.addImageButton("Aceptar",self.buttonsCallback,"icons/aceptar_llamada.png")
-		self.app.addButtons([ "Rechazar"], self.buttonsCallback)
+		
+		#self.app.setStopFunction(self.stop_bell)
+		self.app.addButtons(["Aceptar", "Rechazar"], self.buttonsCallback)
 		self.app.stopSubWindow()
 		
 
@@ -189,7 +190,6 @@ class VideoClient(object):
 
 		# Aquí tendría que el código que envia el frame a la red
 		# ...
-
 
 	def stop_function(self):
 		
@@ -445,10 +445,12 @@ class VideoClient(object):
 
 
 		elif button =="Aceptar":
+			
 			self.accepted_call=1
 			self.event_call.set()
 
 		elif button =="Rechazar":
+			
 			self.accepted_call=-1
 			self.event_call.set()
 
