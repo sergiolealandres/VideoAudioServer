@@ -50,8 +50,6 @@ class VideoClient(object):
 	deafen = False
 	cifrador=None
 	chat=[]
-	
-
 
 	def __init__(self, window_size):
 		s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -419,7 +417,7 @@ class VideoClient(object):
 			self.video_mostrado=0
 			test =cv2.VideoCapture(0)
 			if test is None or not test.isOpened():
-				self.app.infoBox("Error","Ya está la cámara en uso")
+				#self.app.infoBox("Error","Ya está la cámara en uso")
 				return
 
 			self.enviando=test

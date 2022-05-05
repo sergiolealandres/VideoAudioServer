@@ -706,8 +706,6 @@ def call_end(client):
     global current_call
     global callSocket
     
-    
-    
     message = 'CALL_END ' + client.my_nick
     message = bytes(message, 'utf-8')
     try:
@@ -766,6 +764,7 @@ def resetear_valores(client):
     client.cipher=False
     client.chat=[]
     client.app.updateListBox("Chat", client.chat)
+    client.video_mostrado="imgs/video_por_defecto.gif"
 
 def send_menssage(client, text):
 
