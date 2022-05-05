@@ -16,7 +16,7 @@ from time import sleep
 from cifrado import *
 from conexion_servidor import *
 from PIL import Image, ImageTk
-from audio import *
+from audio import audio_receiver, audio_sender
 from concurrent.futures import ThreadPoolExecutor
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import *
@@ -76,6 +76,7 @@ def call(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
         print(sentence)
     except socket.timeout:
         client.app.infoBox("Error", "El usuario " + target_nick + " no ha contestado")
+        
         return
     
     if sentence[:13] == "CALL_ACCEPTED":
@@ -156,7 +157,7 @@ def call_waiter(user_Port,client,semaforo):
 
         client.app.setTabbedFrameDisabledTab("Tabs", "LIST USERS", True)
         client.app.setTabbedFrameDisabledTab("Tabs", "SEARCH USER", True)
-
+        waitingSocket.close() 
         return None
 
     waitingSocket.listen(10)
@@ -225,6 +226,8 @@ def call_waiter(user_Port,client,semaforo):
                         print("MI CLAVE ES", key)
                         key = key.to_bytes(16, "little")
                         client.cifrador=AES.new(key, AES.MODE_ECB)
+                    else:
+                        client.cipher=False
                         
 
 
@@ -408,7 +411,19 @@ def video_receiver(client):
     resolucion = None
     receiverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     receiverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    receiverSocket.bind((client.my_ip,int(client.my_data_port)))
+
+    try:
+
+        receiverSocket.bind((client.my_ip,int(client.my_data_port)))
+
+    except OSError:
+
+        client.app.infoBox("Error", "Hay otro usuario con esta misma IP utilizando el puerto"+ str(client.my_data_port))
+        call_end(client)
+        receiverSocket.close()
+        return
+            
+
     receiverSocket.settimeout(0.1)
     buffer_circular=[]
     id_ultimo_paquete_reproducido=0
@@ -744,6 +759,7 @@ def send_menssage(client, text):
     global callSocket
 
     mensaje = "MESSAGE "+text
+    mensaje=bytes(mensaje,'utf-8')
     try:
         callSocket.send(mensaje)
 

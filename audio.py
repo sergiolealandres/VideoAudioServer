@@ -4,6 +4,8 @@ import heapq
 import pyaudio
 import socket
 
+#from call import call_end
+
 CHUNK = 1024
 FORMAT = pyaudio.paInt16
 CHANNELS = 2
@@ -63,7 +65,16 @@ def audio_receiver(client):
     audio_receiver_socket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     audio_receiver_socket.setsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF,BUFF_SIZE)
 
-    audio_receiver_socket.bind((client.my_ip,int(client.my_data_port)-1))
+    try:
+
+        audio_receiver_socket.bind((client.my_ip,int(client.my_data_port)-1))
+
+    except OSError:
+
+        client.app.infoBox("Error", "Hay otro usuario con esta misma IP utilizando el puerto"+ str(int(client.my_data_port)-1))
+        #call_end(client)
+        audio_receiver_socket.close()
+        return
     audio_receiver_socket.settimeout(0.1)
     
     stream_output = p.open(format=FORMAT,
