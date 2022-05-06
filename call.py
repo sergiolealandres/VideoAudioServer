@@ -199,8 +199,6 @@ def call_waiter(user_Port,client,semaforo):
 
                 client.accepted_call=0
                 client.event_call.clear()
-
-
                 client.app.showSubWindow("LLamada entrante")
                 client.event_call.wait(timeout=10)
                 client.app.hideSubWindow("LLamada entrante", useStopFunction=False)
@@ -337,7 +335,7 @@ def manage_call(client,connectionSocket):
     audio_recv.start()
     audio_send.start()
     
-
+    callSocket.settimeout(3)
     client.app.showSubWindow("Panel de la llamada")
 
     #CONTROL DE COMUNICACIONES:
@@ -345,7 +343,11 @@ def manage_call(client,connectionSocket):
         try:
             sentence = callSocket.recv(1024)
         except socket.timeout:
+
+            if client.end_call==1:
+                break
             continue
+            
 
         sentence = sentence.decode('utf-8')
         
