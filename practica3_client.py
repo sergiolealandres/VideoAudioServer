@@ -2,6 +2,7 @@
 import threading
 from appJar import gui
 from PIL import Image, ImageTk
+from cv2 import COLOR_BGR2RGB, cvtColor
 from call import *
 import call
 import cv2
@@ -16,7 +17,8 @@ class ScreenCapturer(object):
 		monitor = self.sct.monitors[1]
 		sct_img = self.sct.grab(monitor)
 		print("Tiempo despues",time.time())
-		return True, np.array(Image.frombytes('RGB', sct_img.size, sct_img.bgra, 'raw', 'BGRX'))
+		frame = np.array(Image.frombytes('RGB', sct_img.size, sct_img.bgra, 'raw', 'BGRX'))
+		return True, cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
 	def set(self,arg1,arg2):
 		return
 	def release(self):

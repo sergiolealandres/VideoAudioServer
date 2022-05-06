@@ -61,6 +61,9 @@ def call_user(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,cli
     except ConnectionRefusedError:
         client.app.infoBox("Error", "El usuario " + target_nick + " no está conectado")
         return
+    except OSError:
+        client.app.infoBox("Error", "No route to host")
+        return
 
     sentence = "CALLING "+ client.my_nick + " "+ str(client.my_data_port)
     if client.cipher==True:
@@ -76,6 +79,11 @@ def call_user(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,cli
         print(sentence)
     except socket.timeout:
         client.app.infoBox("Error", "El usuario " + target_nick + " no ha contestado")
+        resetear_valores(client)
+        callSocket.close()
+        return
+    except ConnectionResetError:
+        client.app.infoBox("Error", "Ha habido un problema con la conexión")
         resetear_valores(client)
         callSocket.close()
         return
@@ -427,7 +435,7 @@ def video_receiver(client):
         return
             
 
-    receiverSocket.settimeout(10)
+    receiverSocket.settimeout(0.1)
     buffer_circular=[]
     id_ultimo_paquete_reproducido=0
     tiempo_ultimo_paquete=0
@@ -435,7 +443,7 @@ def video_receiver(client):
     fps_enviados_segundo=0
    
 
-    
+    resolucion_own = (160,120)
     data = b'' ### CHANGED
    
 
@@ -449,11 +457,12 @@ def video_receiver(client):
                 try:
                     data,_ = receiverSocket.recvfrom(60000)
                 except socket.timeout:
-                    if client.call_hold==False:
+                    """if client.call_hold==False:
                         client.app.infoBox("Info", "Hemos cerrado la llamada ya que el usuario está incativo")
                         client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
                         call_end(client)
-                        break
+                        break"""
+                    continue
 
                 if client.cipher==True:
 
@@ -499,49 +508,54 @@ def video_receiver(client):
 
 
             # Retrieve message size
+            
             try:
                 data,_ = receiverSocket.recvfrom(60000)
+                received = True
             except socket.timeout:
-                if client.call_hold==False:
+                """if client.call_hold==False:
                     client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
                     call_end(client)
-                    break
-
-            if client.cipher==True:
-
-                data=client.cifrador.decrypt(data)
-                data=unpad(data, 16)
-
-            data=data.split(b'#')
-
-            if len(data)<=4:
-                client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
-                call_end(client)
+                    break"""
+                received = False
                 
-                client.app.infoBox("Error", "Hemos cerrado la llamada porque se están recibiendo frames sin cabecera \
-                    o con un formato incorrecto de esta")
+
+            if received:
+                if client.cipher==True:
+
+                    data=client.cifrador.decrypt(data)
+                    data=unpad(data, 16)
+
+                data=data.split(b'#')
+
+                if len(data)<=4:
+                    client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
+                    call_end(client)
+                    
+                    client.app.infoBox("Error", "Hemos cerrado la llamada porque se están recibiendo frames sin cabecera \
+                        o con un formato incorrecto de esta")
+                
+                order_num, timestamp, resolucion, fps=data[0], data[1], data[2], data[3]
+                resolucion = resolucion.decode("utf-8")
+                resolucion = resolucion.split("x")
+                
+                
+                real_data=b"#".join(data[4:])
+                
+                frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
+                timestamp=float(timestamp.decode('utf-8'))
+                order_num=int(order_num.decode('utf-8'))
+                
+                if order_num < id_ultimo_paquete_reproducido:
+                    continue
+                
+                tiempo = time.time()
+                time_diff = tiempo - tiempo_ultimo_paquete
+                tiempo_ultimo_paquete = tiempo
+                reproduction_fps=max(MIN_FPS,round(1/((0.8/reproduction_fps + time_diff*0.2))))
             
-            order_num, timestamp, resolucion, fps=data[0], data[1], data[2], data[3]
-            resolucion = resolucion.decode("utf-8")
-            resolucion = resolucion.split("x")
-            
-            
-            real_data=b"#".join(data[4:])
-            resolucion_own = (160,120)
-            frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
-            timestamp=float(timestamp.decode('utf-8'))
-            order_num=int(order_num.decode('utf-8'))
-            
-            if order_num < id_ultimo_paquete_reproducido:
-                continue
-            
-            tiempo = time.time()
-            time_diff = tiempo - tiempo_ultimo_paquete
-            tiempo_ultimo_paquete = tiempo
-            reproduction_fps=max(MIN_FPS,round(1/((0.8/reproduction_fps + time_diff*0.2))))
-           
-            heapq.heappush(buffer_circular, (order_num, timestamp, frame))
-            
+                heapq.heappush(buffer_circular, (order_num, timestamp, frame))
+                
             diff = time.time() - control_time - 1/reproduction_fps
             #print("fps: ",reproduction_fps,fps,len(buffer_circular),diff)
             if len(buffer_circular)>0:
@@ -577,7 +591,7 @@ def video_receiver(client):
                     img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                     client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage') 
 
-                if diff >0.5:
+                if diff > 0.5:
 
             
                     while len(buffer_circular) > 0.5*reproduction_fps:
@@ -602,8 +616,8 @@ def video_receiver(client):
                             cv2_im = cv2.cvtColor(frame_shown, cv2.COLOR_BGR2RGB)
                             img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                             client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage')
-
-                    control_time=buffer_circular[0][1]
+                    if len(buffer_circular) > 0:
+                        control_time=buffer_circular[0][1]
                 
                 
 
