@@ -22,15 +22,35 @@ from concurrent.futures import ThreadPoolExecutor
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import *
 
+from verification import validIP, validPort
+
 
 current_call = 0
 callSocket = None
-MIN_FPS = 8
 p, g, x, private, y, key=0,0,0,0,0,0
 
+MIN_FPS = 8
+BUFF_REC_VIDEO=60000
+SEND_FPS=32
+HALF_QUALITY=50
+TIMEOUT_ANSWER=10
+CONNECTION_TIMEOUT=5
+RESPONSE_TIMEOUT=20
+BUFF_REC=1024
+CALL_SOCKET_TIMEOUT=3
+CONTROL_SOCKET_TIMEOUT=1
+FRAME_RECIEVER_TIMOUT=0.1
+MAX_CONECTIONS=10
+EVENT_TIMEOUT=2
+LEN_ACCEPTED_CIPHER=4
+LEN_CALLING_CIPHER=6
+RESOLUTION_OWN=(160,120)
+DEFAULT_FPS=24
+FILLING_SECS=2
+MAX_RETARDO=0.5
 
 
-def call_user(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,client):
+def call_user(semaforo,client):
     global current_call
     global callSocket
     global p
@@ -39,9 +59,6 @@ def call_user(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,cli
     global private
     global y
     global key
-    
-    serverName = target_IP
-    serverPort = target_port
 
     semaforo.acquire()
     if(current_call == 1):
@@ -52,15 +69,15 @@ def call_user(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,cli
 
     callSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     callSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    callSocket.settimeout(5)
+    callSocket.settimeout(CONNECTION_TIMEOUT)
     try:
-        callSocket.connect((serverName,int(serverPort)))
+        callSocket.connect((client.selected_ip,int(client.selected_control_port)))
     except socket.timeout:
-        client.app.infoBox("Error", "El usuario " + target_nick + " no está conectado")
+        client.app.infoBox("Error", "El usuario " + client.selected_nick + " no está conectado")
         return
 
     except ConnectionRefusedError:
-        client.app.infoBox("Error", "El usuario " + target_nick + " no está conectado")
+        client.app.infoBox("Error", "El usuario " + client.selected_nick + " no está conectado")
         return
     except OSError:
         client.app.infoBox("Error", "No route to host")
@@ -73,13 +90,13 @@ def call_user(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,cli
         sentence+=" "+ str(p) + " " + str(g) + " " + str(x)
 
     callSocket.send(sentence.encode())
-    callSocket.settimeout(20)
+    callSocket.settimeout(RESPONSE_TIMEOUT)
     try:
-        sentence = callSocket.recv(1024)
+        sentence = callSocket.recv(BUFF_REC)
         sentence = sentence.decode('utf-8')
-        print(sentence)
+
     except socket.timeout:
-        client.app.infoBox("Error", "El usuario " + target_nick + " no ha contestado")
+        client.app.infoBox("Error", "El usuario " + client.selected_nick + " no ha contestado")
         resetear_valores(client)
         callSocket.close()
         return
@@ -94,61 +111,63 @@ def call_user(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,cli
 
         splitted=sentence.split(" ")
 
+        if len(splitted)<3:
+            client.app.infoBox("Error", "La respuesta no ha sido válida")
+            callSocket.close()
+            return
+
+
         if client.cipher==True:
 
-            if len(splitted)==4:
+            if len(splitted)==LEN_ACCEPTED_CIPHER:
                 y = int(splitted[3])
                 key = generate_cipher_key(y,private,p)
-                print("MI CLAVE ES", key)
-                key = key.to_bytes(16, "little")
+                
+                key = key.to_bytes(AES.block_size, "little")
                 client.cifrador=AES.new(key, AES.MODE_ECB)
 
             else:
                 client.cipher=False
             
+        print(splitted[1], client.selected_nick)
 
-
-        if splitted[1]!=target_nick:
+        if splitted[1]!=client.selected_nick:
             client.app.infoBox("Error", "Los nicks no coinciden")
             callSocket.close()
             return
 
         
         client.selected_data_port=splitted[2]
-        client.selected_nick=splitted[1]
-        try:
-            data= query(splitted[1])
-        except ServerErrorTimeout:
+
+        if validPort(client.selected_data_port)==False:
+            client.app.infoBox("Error","Not valid data port")
             callSocket.close()
-            client.app.infoBox("Error", "DS Timeout")
             return
-        nick, ip, control_port, versions=data
+
+        client.selected_nick=splitted[1]
 
         semaforo.acquire()
         if(current_call == 1):
             semaforo.release()
             callSocket.close()
-            raise Exception("There is already a call")
+            client.app.infoBox("Error","There is already a call")
 
         current_call = 1
         semaforo.release()    
-       
-        client.selected_ip=ip
         
-        print("post-lock call")
         thr = threading.Thread(target=manage_call,args = (client,None,))
         thr.start()
     elif sentence[:9] == "CALL_BUSY":
-        client.app.infoBox("Error", "El usuario " + target_nick + " está ocupado")
+        client.app.infoBox("Error", "El usuario " + client.selected_nick + " está ocupado")
         callSocket.close()
     elif sentence[:11] == "CALL_DENIED":
-        client.app.infoBox("Error", "El usuario " + target_nick + " ha rechazado la llamada")
+        client.app.infoBox("Error", "El usuario " + client.selected_nick + " ha rechazado la llamada")
         callSocket.close()
     else:
         client.app.infoBox("Error", "La respuesta no ha sido válida")
         callSocket.close()
 
-def call_waiter(user_Port,client,semaforo):
+def call_waiter(client,semaforo):
     global current_call
     global p
     global g
@@ -157,50 +176,49 @@ def call_waiter(user_Port,client,semaforo):
     global y
     global key
 
-
     waitingSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     waitingSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    waitingSocket.settimeout(1)
+    waitingSocket.settimeout(CONTROL_SOCKET_TIMEOUT)
     try:
         waitingSocket.bind((client.my_ip, int(client.my_control_port)))
     except OSError:
         
         client.app.infoBox("Error", "Hay un usuario activo usando el puerto de control "+ str(client.my_control_port))
-
         client.app.setTabbedFrameDisabledTab("Tabs", "LIST USERS", True)
         client.app.setTabbedFrameDisabledTab("Tabs", "SEARCH USER", True)
+        client.app.setTabbedFrameDisabledTab("Tabs", "Registrarse", False)
         waitingSocket.close() 
         return None
 
-    waitingSocket.listen(10)
+    waitingSocket.listen(MAX_CONECTIONS)
 
     while client.app.alive:
         try:
             connectionSocket, addr = waitingSocket.accept()
         except socket.timeout:
             continue
-        print("Empezamos bucle")
-        
-        print("ITERACION")
-        print("SALGO DEL BUCLE") 
+
         try:
-            sentence = connectionSocket.recv(1024)
+            sentence = connectionSocket.recv(BUFF_REC)
         except socket.timeout:
             continue
         sentence = sentence.decode('utf-8')
-        print("Se ha recibido:")
-        print(sentence)
-        print("")
+
         words = sentence.split(" ")
-        print(words)   
+
         if sentence=='':
             continue
         if sentence[:7] == "CALLING":
-            print("prelock wait")
+
+            if len(words)<3:
+                client.app.infoBox("Error", "Mensaje de calling no válido")
+                callSocket.close()
+                return
+
             semaforo.acquire()
             current_call_value = current_call
             semaforo.release()
-            print("postlock wait", current_call_value)
+
             if current_call_value == 1:
                 connectionSocket.send("CALL_BUSY".encode())
                 connectionSocket.close()
@@ -211,7 +229,7 @@ def call_waiter(user_Port,client,semaforo):
                 client.accepted_call=0
                 client.event_call.clear()
                 client.app.showSubWindow("LLamada entrante")
-                client.event_call.wait(timeout=10)
+                client.event_call.wait(timeout=TIMEOUT_ANSWER)
                 client.app.hideSubWindow("LLamada entrante", useStopFunction=False)
 
                 if client.accepted_call==1:
@@ -220,9 +238,29 @@ def call_waiter(user_Port,client,semaforo):
                     except ServerErrorTimeout:
                         connectionSocket.close()
                         client.app.infoBox("Error", "DS Timeout")
-                        return
-                    client.selected_nick, ip, control_port, versions=data
+                        continue
 
+                    nick, ip, control_port, versions=data
+
+                    if validPort(control_port)==False:
+                        client.app.infoBox("Error","Not valid control port")
+                        connectionSocket.close()
+                        continue
+
+                    if validIP(ip)==False:
+                        client.app.infoBox("Error","Not valid ip")
+                        connectionSocket.close()
+                        continue
+
+                    if "V0" not in versions and "V1" not in versions:
+                        client.app.infoBox("Error","El usuario no soporta ni la V0 ni la V1")
+                        connectionSocket.close()
+                        continue
+
+                    if validPort(words[2])==False:
+                        client.app.infoBox("Error","Not valid data port")
+                        connectionSocket.close()
+                        continue
 
                     semaforo.acquire()
                     if(current_call == 1):
@@ -234,24 +272,21 @@ def call_waiter(user_Port,client,semaforo):
                     current_call = 1
                     semaforo.release()
                     client.selected_data_port=words[2]
-
-
-                    if "V1" in versions and len(words)==6:
+                    
+                    if "V1" in versions and len(words)==LEN_CALLING_CIPHER:
                         client.cipher=True
                         p,g,x = int(words[3]), int(words[4]), int(words[5])
                         y,private=generate_keys_receiver(p,g)
                         key = generate_cipher_key(x,private,p)
-                        print("MI CLAVE ES", key)
-                        key = key.to_bytes(16, "little")
+
+                        key = key.to_bytes(AES.block_size, "little")
                         client.cifrador=AES.new(key, AES.MODE_ECB)
                     else:
                         client.cipher=False
                         
-
-
                     client.selected_control_port=control_port
-
                     client.selected_ip=ip
+                    client.selected_nick=nick
 
                     mensaje = "CALL_ACCEPTED "+client.my_nick+" "+client.my_data_port
 
@@ -268,56 +303,51 @@ def call_waiter(user_Port,client,semaforo):
                     connectionSocket.send(mensaje.encode())
                     connectionSocket.close()
         elif sentence[:13] == "CALL_ACCEPTED":
-            print("prelock call")
+
             splitted=sentence.split(" ")
+
+            if len(splitted)<3:
+                client.app.infoBox("Error", "La respuesta no ha sido válida")
+                connectionSocket.close()
+                continue
 
             if splitted[1]!=client.selected_nick:
                 client.app.infoBox("Error", "Los nicks no coinciden")
                 connectionSocket.close()
-                return
-
+                continue
 
             client.selected_data_port=splitted[2]
-            try:
-                data= query(splitted[1])
 
-            except ServerErrorTimeout:
+            if validPort(client.selected_data_port)==False:
+                client.app.infoBox("Error","Not valid data port")
                 connectionSocket.close()
-                client.app.infoBox("Error", "DS Timeout")
-                return
-
-            nick, ip, control_port, versions=data
+                continue
             
             semaforo.acquire()
             if(current_call == 1):
                 semaforo.release()
                 connectionSocket.close()
-                raise Exception("There is already a call")
-
+                client.app.infoBox("Error","There is already a call")
 
             current_call = 1
             semaforo.release()
 
             if client.cipher==True:
 
-                if len(splitted)==4:
+                if len(splitted)==LEN_ACCEPTED_CIPHER:
 
                     y = splitted[3]
                     key = generate_cipher_key(y,private,p)
-                    print("MI CLAVE ES", key)
-                    key = key.to_bytes(16, "little")
+
+                    key = key.to_bytes(AES.block_size, "little")
                     client.cifrador=AES.new(key, AES.MODE_ECB)
                 
                 else:
                     client.cipher=False
-
-            client.selected_ip=ip
             
-            print("post-lock call")
             thr = threading.Thread(target=manage_call,args = (client,None,))
             thr.start()
         else:
-            print("Se ha recibido algo que no es")
             connectionSocket.close() 
         
     waitingSocket.close()        
@@ -328,7 +358,6 @@ def manage_call(client,connectionSocket):
     
     global current_call
     global callSocket
-    print("Entramos en la llamada")
 
     if connectionSocket is not None:
         callSocket = connectionSocket
@@ -359,17 +388,16 @@ def manage_call(client,connectionSocket):
     audio_recv.start()
     audio_send.start()
     
-    callSocket.settimeout(3)
+    callSocket.settimeout(CALL_SOCKET_TIMEOUT)
     client.app.showSubWindow("Panel de la llamada")
 
     #CONTROL DE COMUNICACIONES:
     while client.app.alive and client.end_call == 0:
         try:
-            sentence = callSocket.recv(1024)
+            sentence = callSocket.recv(BUFF_REC)
         except socket.timeout:
 
             if client.end_call==1:
-                print("TERMINA")
                 return
             continue
             
@@ -377,12 +405,11 @@ def manage_call(client,connectionSocket):
         sentence = sentence.decode('utf-8')
         
         if sentence == '':
-            print("desconexión")
-            client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
+
+            if client.app.alive:
+                client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
             call_end(client)
-        print("Se ha recibido:")
-        print(sentence)
-        print("")
+
         if sentence[:9] == "CALL_HOLD":
             client.call_hold=True
         elif sentence[:11] == "CALL_RESUME":
@@ -392,7 +419,6 @@ def manage_call(client,connectionSocket):
             client.audio_sender_event.set()
             client.audio_receiver_event.set()
         elif sentence[:8] == "CALL_END":
-            print("RECIBO CALL END")
             client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
             client.end_call = 1
             client.sender_event.set()
@@ -403,16 +429,10 @@ def manage_call(client,connectionSocket):
             
         elif sentence[:7]=="MESSAGE":
 
-            print(client.selected_nick)
-            print("eeeee")
-            texto=client.selected_nick+": "+sentence[8:]+"\n\n"
-            print(texto)
-            print("eeeee")
-            
+            texto=client.selected_nick+": "+sentence[8:]
+
             client.chat.append(texto)
             client.app.updateListBox("Chat", client.chat)
-            
-
     
     client.semaforo.acquire()
     current_call = 0
@@ -452,43 +472,37 @@ def video_receiver(client):
         return
             
 
-    receiverSocket.settimeout(0.1)
+    receiverSocket.settimeout(FRAME_RECIEVER_TIMOUT)
     buffer_circular=[]
     id_ultimo_paquete_reproducido=0
     tiempo_ultimo_paquete=0
-    reproduction_fps=24
-    fps_enviados_segundo=0
-   
+    reproduction_fps=DEFAULT_FPS
 
-    resolucion_own = (160,120)
-    data = b'' ### CHANGED
+    resolucion_own = RESOLUTION_OWN
+    data = b''
    
 
     #LLenado de dos segundos
     def llenar_buffer(buffer_circular,reproduction_fps):
         tiempo_ultimo_paquete = 0
-        while client.end_call == 0 and client.app.alive and len(buffer_circular)<2*reproduction_fps:
+        while client.end_call == 0 and client.app.alive and len(buffer_circular)<FILLING_SECS*reproduction_fps:
 
             if client.call_hold == 0:
                 # Retrieve message size
                 try:
-                    data,_ = receiverSocket.recvfrom(60000)
+                    data,_ = receiverSocket.recvfrom(BUFF_REC_VIDEO)
                 except socket.timeout:
-                    """if client.call_hold==False:
-                        client.app.infoBox("Info", "Hemos cerrado la llamada ya que el usuario está incativo")
-                        client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
-                        call_end(client)
-                        break"""
+                    
                     continue
 
                 if client.cipher==True:
 
                     data=client.cifrador.decrypt(data)
-                    data=unpad(data, 16)
+                    data=unpad(data, AES.block_size)
 
                 
                 data=data.split(b'#')
-                order_num, timestamp, resolucion, fps=data[0], data[1], data[2], data[3]
+                order_num, timestamp, _, _=data[0], data[1], data[2], data[3]
 
                 real_data=b"#".join(data[4:])
                 frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
@@ -505,7 +519,7 @@ def video_receiver(client):
 
                 reproduction_fps=max(MIN_FPS,round(1/((0.8/reproduction_fps + time_diff*0.2))))
                 heapq.heappush(buffer_circular, (order_num,timestamp, frame))
-                #print("llenando",len(buffer_circular),reproduction_fps)
+
         return reproduction_fps,tiempo_ultimo_paquete
     
     reproduction_fps,tiempo_ultimo_paquete = llenar_buffer(buffer_circular,reproduction_fps)
@@ -528,13 +542,10 @@ def video_receiver(client):
             # Retrieve message size
             
             try:
-                data,_ = receiverSocket.recvfrom(60000)
+                data,_ = receiverSocket.recvfrom(BUFF_REC_VIDEO)
                 received = True
             except socket.timeout:
-                """if client.call_hold==False:
-                    client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
-                    call_end(client)
-                    break"""
+                
                 received = False
                 
 
@@ -542,7 +553,7 @@ def video_receiver(client):
                 if client.cipher==True:
 
                     data=client.cifrador.decrypt(data)
-                    data=unpad(data, 16)
+                    data=unpad(data, AES.block_size)
 
                 data=data.split(b'#')
 
@@ -553,9 +564,7 @@ def video_receiver(client):
                     client.app.infoBox("Error", "Hemos cerrado la llamada porque se están recibiendo frames sin cabecera \
                         o con un formato incorrecto de esta")
                 
-                order_num, timestamp, resolucion, fps=data[0], data[1], data[2], data[3]
-                resolucion = resolucion.decode("utf-8")
-                resolucion = resolucion.split("x")
+                order_num, timestamp, _, _=data[0], data[1], data[2], data[3]
                 
                 
                 real_data=b"#".join(data[4:])
@@ -575,8 +584,8 @@ def video_receiver(client):
                 heapq.heappush(buffer_circular, (order_num, timestamp, frame))
                 
             diff = time.time() - control_time - 1/reproduction_fps
-            #print("fps: ",reproduction_fps,fps,len(buffer_circular),diff)
-            if len(buffer_circular)>0:
+
+            if len(buffer_circular)>0 and client.app.alive:
                 if diff < 0:
                     continue
 
@@ -594,7 +603,6 @@ def video_receiver(client):
                     frame=cv2.resize(frame, client.resolucion_tuple)
                     own_video = cv2.resize(own_video,resolucion_own)
                     frame_shown = frame
-                    #print("Los shapes son ",frame.shape,own_video.shape)
                     frame_shown[0:own_video.shape[0],0:own_video.shape[1]] = own_video
                 else:
                     frame_shown = cv2.resize(frame, client.resolucion_tuple)
@@ -609,10 +617,10 @@ def video_receiver(client):
                     img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                     client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage') 
 
-                if diff > 0.5:
+                if diff > MAX_RETARDO:
 
             
-                    while len(buffer_circular) > 0.5*reproduction_fps:
+                    while len(buffer_circular) > MAX_RETARDO*reproduction_fps:
 
                         frame=buffer_circular[0][2]
                         client.timestamp_last_image = buffer_circular[0][1]
@@ -624,7 +632,6 @@ def video_receiver(client):
                         if own_video.size > 0:
                             frame_shown = cv2.resize(frame, client.resolucion_tuple)
                             own_video = cv2.resize(own_video,resolucion_own)
-                            #print("Los shapes son ",frame_shown.shape,own_video.shape)
                             frame_shown[0:own_video.shape[0],0:own_video.shape[1]] = own_video
                         else:
                             frame_shown = cv2.resize(frame, client.resolucion_tuple)
@@ -637,24 +644,20 @@ def video_receiver(client):
                     if len(buffer_circular) > 0:
                         control_time=buffer_circular[0][1]
                 
-                
-
-
         else:
             #clean the buffer
             while client.end_call == 0 and client.app.alive and client.call_hold is True:
                 try:
-                    _,_ = receiverSocket.recvfrom(60000)
+                    _,_ = receiverSocket.recvfrom(BUFF_REC_VIDEO)
                 except socket.timeout:
                     if client.call_hold==False:
                         client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
                         call_end(client)
                         break
             
-            print("CAAAAAAAAAAAAAAAAAAAALlllllllllllll HHHHHHHHHHHHHHHHOOOOOOOOOOOOOOOOOOLLLLLLLLLLLLLLLD")
             #wait until resume
             while client.end_call == 0 and client.app.alive and client.call_hold is True:
-                client.receiver_event.wait(timeout=2)
+                client.receiver_event.wait(timeout=EVENT_TIMEOUT)
                 client.receiver_event.clear()
                 if(client.end_call == 0 and client.app.alive and client.call_hold is False):
                     buffer_circular = []
@@ -663,31 +666,23 @@ def video_receiver(client):
                     if(len(buffer_circular)>0):
                         control_time=buffer_circular[0][1]
 
-        
-
-    #client.app.setImage("Video mostrado", client.imagen_no_camera)
-    print("termino de recibir video")
     receiverSocket.close()
 
 def video_sender(client):
 
-    fps_sending = 32
+    fps_sending = SEND_FPS
     senderSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     senderSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    print(int((client.selected_data_port)))
     
     order_num=0
-
     client.enviando = cv2.VideoCapture(client.video_mostrado)
 
     while(client.end_call == 0):
         if client.call_hold:
-            client.sender_event.wait(timeout = 2)
+            client.sender_event.wait(timeout = EVENT_TIMEOUT)
             client.sender_event.clear()
             continue
         tiempo_inicio = time.time()
-
-        #client.setImageResolution(client.resolucion_sender)
 
         ret, frame = client.enviando.read()
         
@@ -702,16 +697,13 @@ def video_sender(client):
         client.current_frame = frame
         frame = cv2.resize(frame,client.sender_tuple)
     
-        encode_param = [cv2.IMWRITE_JPEG_QUALITY, 50]
-        #print(frame, encode_param)
+        encode_param = [cv2.IMWRITE_JPEG_QUALITY, HALF_QUALITY]
+
         result, encimg = cv2.imencode('.jpg', frame, encode_param)
         # Serialize frame
         data = encimg.tobytes()
-        #data = pickle.dumps(frame)
 
         # Send message length first
-
-        
         header=str(order_num)+'#'+str(time.time())+'#'+client.resolucion_sender_value+"#"+str(fps_sending)+"#"
         order_num+=1
         header_bytes=bytes(header, 'utf-8')
@@ -719,8 +711,7 @@ def video_sender(client):
         paquete=header_bytes + data
 
         if client.cipher==True:
-            #print("CIFRO")
-            paquete=pad(paquete, 16)
+            paquete=pad(paquete, AES.block_size)
             paquete=client.cifrador.encrypt(paquete)
 
 
@@ -728,8 +719,6 @@ def video_sender(client):
         if time_diff < 1.0/fps_sending:
             time.sleep(1.0/fps_sending - time_diff)
         
-
-        print("mando", len(paquete))
         senderSocket.sendto(paquete,(client.selected_ip,int(client.selected_data_port)))
     
     client.enviando.release()
@@ -762,7 +751,7 @@ def parar_llamada(client):
     message = bytes(message, 'utf-8')
     try:
         callSocket.send(message)
-        print("envio parar")
+
     except IOError as e:
         if e.errno == errno.EPIPE:
             client.call_end=1
@@ -812,4 +801,3 @@ def send_menssage(client, text):
     except IOError as e:
         if e.errno == errno.EPIPE:
             client.call_end=1
-

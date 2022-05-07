@@ -1,3 +1,10 @@
+from sympy import minimal_polynomial
+
+
+MIN_PORT = 1024
+MAX_PORT = 49151
+MIN_IP = 0
+MAX_IP = 255
 
 
 def validIP(ip):
@@ -12,11 +19,21 @@ def validIP(ip):
 
 def validNum(num):
 
-    return int(num)>=0 and int(num) <=255
+    try:
+        num=int(num)
+    except ValueError:
+        return False
+
+    return num>=MIN_IP and num <=MAX_IP
 
 def validPort(port):
 
-    return int(port)>=1024 and int(port)<=49151
+    try:
+        port=int(port)
+    except ValueError:
+        return False
+
+    return port>=MIN_PORT and port<=MAX_PORT
 
 def dont_call_myself(client):
 

@@ -10,13 +10,13 @@ from conexion_servidor import *
 from verification import *
 from mss import mss
 
+CAPTURA_VIDEO_SIZE = (450,337)
+
 class ScreenCapturer(object):
 	sct = mss()
 	def read(self):
-		print("TIempo antes",time.time())
 		monitor = self.sct.monitors[1]
 		sct_img = self.sct.grab(monitor)
-		print("Tiempo despues",time.time())
 		frame = np.array(Image.frombytes('RGB', sct_img.size, sct_img.bgra, 'raw', 'BGRX'))
 		return True, cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
 	def set(self,arg1,arg2):
@@ -68,10 +68,8 @@ class VideoClient(object):
 		# Registramos la función de captura de video
 		# Esta misma función también sirve para enviar un vídeo
 		self.cap = cv2.VideoCapture(self.imagen_no_camera)
-		
 		self.mode_webcam = False
 		self.app.setPollTime(20)
-		#self.app.registerEvent(self.capturaVideo)
 		
 		# Añadir los botones
 		self.app.addButtons(["Desconectar Cam", "Salir"], self.buttonsCallback)
@@ -80,18 +78,14 @@ class VideoClient(object):
 
 		self.app.startSubWindow("LLamada entrante", title="Recepción de llamada", modal=True)
 		self.app.addLabel("Nick entrante", "")
-		
-		#self.app.setStopFunction(self.stop_bell)
 		self.app.addButtons(["Aceptar", "Rechazar"], self.buttonsCallback)
 		self.app.stopSubWindow()
 		
-
 		self.app.startSubWindow("Panel de la llamada", modal=True)
 		self.app.setStretch("both")
 		self.app.setSticky("nesw")
 		self.app.setStopFunction(self.stop_function)
 		self.app.addImage("Video mostrado", self.imagen_no_camera)
-		
 		self.app.addListBox("Chat",self.chat,0,1)
 		self.app.addEntry("msj",1,1)
 		self.app.addButton("Send", self.buttonsCallback,2,1)
@@ -102,8 +96,6 @@ class VideoClient(object):
 				self.app.setBg("LightSkyBlue")
 				self.app.addButtons(["Colgar","Pausar", "Reanudar"],self.buttonsCallback)
 				
-				
-			
 			with self.app.tab("Opciones de Audio/Vídeo"):
 				self.app.setFg("DarkBlue")
 				self.app.setBg("LightSkyBlue")
@@ -114,8 +106,8 @@ class VideoClient(object):
 				self.app.setBg("LightSkyBlue")
 				self.app.setInPadding([20,20])
 				self.app.addButtons(["Resolución Baja","Resolución Media","Resolución Alta"],self.buttonsCallback)
+
 		self.app.addStatusbar(fields=2)
-		self.app.setStatusbarWidth(50)
 		self.app.setStatusbar("Time: 0", 0)
 		self.app.setStatusbar("Fps: 0", 1)
 		self.app.stopSubWindow()
@@ -129,17 +121,15 @@ class VideoClient(object):
 				self.app.addLabelEntry("Nick\t\t", 0, 0)
 				self.app.addLabelSecretEntry("Contraseña\t", 1, 0)
 				self.app.addLabelEntry("IP\t\t", 2, 0)
-				#self.app.addButton("IP VPN", self.buttonsCallback, 2,1)
 				self.app.addLabelEntry("Puerto Control\t\t", 3, 0)
 				self.app.addLabelEntry("Puerto Datos\t\t", 4, 0)
 				self.app.addLabelEntry("Protocolo\t\t", 5, 0)
 				self.app.addButtons(["Registrarse", "Clean"], self.buttonsCallback, 6, 0, 2)
 				self.app.setEntryFocus("Nick\t\t")
-				# Pone default values.
 				self.app.setEntry("IP\t\t", self.local_IP)
 				self.app.setEntry("Protocolo\t\t", "V0#V1")
 				self.app.setEntry("Puerto Control\t\t", "8080")
-				self.app.setEntry("Puerto Datos\t\t", "3333")
+				self.app.setEntry("Puerto Datos\t\t", str(random.randint(MIN_PORT, MAX_PORT)))
 			
 
 			with self.app.tab("SEARCH USER"):
@@ -175,13 +165,12 @@ class VideoClient(object):
 	def capturaVideo(self):
 		
 		# Capturamos un frame de la cámara o del vídeo
-		#print("hooola")
 		ret, frame = self.cap.read()
 		
 		if frame is None and ret==False:
 			
 			return
-		frame = cv2.resize(frame, (450,337))
+		frame = cv2.resize(frame, CAPTURA_VIDEO_SIZE)
 		cv2_im = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
 		img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))		    
 
@@ -203,7 +192,6 @@ class VideoClient(object):
 		# Puede añadirse algún valor superior si la cámara lo permite
 		# pero no modificar estos
 		if resolution == "LOW":
-			print("cambio a low")
 			self.enviando.set(cv2.CAP_PROP_FRAME_WIDTH, 160) 
 			self.enviando.set(cv2.CAP_PROP_FRAME_HEIGHT, 120) 
 		elif resolution == "MEDIUM":
@@ -213,7 +201,9 @@ class VideoClient(object):
 			self.enviando.set(cv2.CAP_PROP_FRAME_WIDTH, 640) 
 			self.enviando.set(cv2.CAP_PROP_FRAME_HEIGHT, 480) 
 
-
+	def disableTabs(self):
+		self.app.setTabbedFrameDisabledTab("Tabs", "LIST USERS")
+		self.app.setTabbedFrameDisabledTab("Tabs", "SEARCH USER")
 				
 	# Función que gestiona los callbacks de los botones
 	def buttonsCallback(self, button):
@@ -224,15 +214,16 @@ class VideoClient(object):
 				or len(self.app.getEntry("IP\t\t"))==0 or len(self.app.getEntry("Protocolo\t\t"))==0 \
 				or len(self.app.getEntry("Puerto Control\t\t"))==0 \
 				or len(self.app.getEntry("Puerto Datos\t\t"))==0:
-				
+				self.disableTabs()
 				self.app.infoBox("Error","Some fields are not completed")
 				return
 
 			self.my_nick = self.app.getEntry("Nick\t\t")
-			print(self.my_nick)
+
 			if self.my_nick.count(" ")>0:
 				self.app.infoBox("Error","Not valid Nick format")
 				self.buttonsCallback("Clean")
+				self.disableTabs()
 				return
 
 			password = self.app.getEntry("Contraseña\t")
@@ -247,16 +238,19 @@ class VideoClient(object):
 			if validIP(self.my_ip)==False:
 				self.app.infoBox("Error","Not valid IP")
 				self.buttonsCallback("Clean")
+				self.disableTabs()
 				return
 
 			if validPort(self.my_control_port)==False:
 				self.app.infoBox("Error","Not valid control port")
 				self.buttonsCallback("Clean")
+				self.disableTabs()
 				return
 
 			if validPort(self.my_data_port)==False:
 				self.app.infoBox("Error","Not valid data port")
 				self.buttonsCallback("Clean")
+				self.disableTabs()
 				return
 			
 			checkSocket = socket.socket(socket. AF_INET, socket. SOCK_STREAM)
@@ -269,7 +263,7 @@ class VideoClient(object):
 				self.app.infoBox("Error",
 									"Selecciona otro puerto de datos, alguien está usando el "\
 										+self.my_data_port+ " o bien el "+str(int(self.my_my_data_port)-1))
-				
+				self.disableTabs()
 				return
 
 			
@@ -277,14 +271,17 @@ class VideoClient(object):
 				if register(self.my_nick, self.my_ip, self.my_control_port, password, self.my_versions)==False:
 
 					self.app.infoBox("Error","Wrong Password")
+					self.disableTabs()
 					return
 			except ServerErrorTimeout:
 				self.app.infoBox("Error", "DS Timeout")
+				self.disableTabs()
 				return
 
 			self.app.setTabbedFrameDisabledTab("Tabs", "LIST USERS", False)
 			self.app.setTabbedFrameDisabledTab("Tabs", "SEARCH USER", False)
-			thr = threading.Thread(target=call_waiter,args = (self.my_control_port, self, self.semaforo))
+			self.app.setTabbedFrameDisabledTab("Tabs", "Registrarse")
+			thr = threading.Thread(target=call_waiter,args = (self, self.semaforo))
 			thr.start()
 
 
@@ -293,7 +290,7 @@ class VideoClient(object):
 
 			if len(nick)==0:
 
-				self.app.infoBox("Error", "Debes de introducir algín nick")
+				self.app.infoBox("Error", "Debes de introducir algún nick")
 				return
 
 			try:
@@ -311,7 +308,8 @@ class VideoClient(object):
 			
 
 			self.selected_control_port=(self.selected_control_port)
-			self.app.setLabel("UserInfo", "Nick = " + nick + "\nIp = " +self.selected_ip + "\nPuerto de control = " + self.selected_control_port + "\nVersión = " + self.selected_version)
+			self.app.setLabel("UserInfo", "Nick = " + nick + "\nIp = " +self.selected_ip + "\nPuerto de control = " \
+				+ self.selected_control_port + "\nVersión = " + self.selected_version)
 			self.searched_user=True
 
 		elif button =="Call":
@@ -340,7 +338,7 @@ class VideoClient(object):
 				self.cipher=True
 
 			
-			call_user(self.selected_nick, self.selected_ip, self.selected_control_port, self.my_ip, self.my_control_port, self.semaforo,self)
+			call_user(self.semaforo,self)
 
 		
 		elif button == "LLamar al usuario seleccionado":
@@ -383,7 +381,7 @@ class VideoClient(object):
 			if "V1" in self.selected_version:
 				self.cipher=True
 
-			call_user(self.selected_nick, self.selected_ip, self.selected_control_port, self.my_ip, self.my_control_port, self.semaforo,self)
+			call_user(self.semaforo,self)
 			
 
 		elif button == 'Actualizar':
@@ -431,7 +429,7 @@ class VideoClient(object):
 			self.video_mostrado=0
 			test =cv2.VideoCapture(0)
 			if test is None or not test.isOpened():
-				#self.app.infoBox("Error","Ya está la cámara en uso")
+				self.app.infoBox("Error","Ya está la cámara en uso")
 				return
 
 			self.enviando=test
@@ -487,7 +485,6 @@ class VideoClient(object):
 				self.camera_conected=0
 				self.app.setButton("Desconectar Cam", "Conectar Cam")
 				self.cap = cv2.VideoCapture(self.imagen_no_camera)
-				#self.app.registerEvent(self.capturaVideo)
 
 		elif button == "Resolución Baja":
 
@@ -523,12 +520,11 @@ class VideoClient(object):
 
 		elif button == "Send":
 			texto=self.app.getEntry("msj")
-			texto_chat=self.my_nick+": "+texto+"\n\n"
+			texto_chat=self.my_nick+": "+texto
 			self.chat.append(texto_chat)
 			self.app.updateListBox("Chat", self.chat)
 			send_menssage(self,texto)
 			self.app.clearEntry("msj")
-
 
 
 if __name__ == '__main__':

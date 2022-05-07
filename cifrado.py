@@ -1,16 +1,18 @@
 import random
 from sympy import *
-
+MIN_RANGE =2**8
+MAX_RANGE= 2**12
 
 def generate_keys():
 
-    primes = [i for i in range(2**8, 2**12) if isprime(i)]
+    primes = [i for i in range(MIN_RANGE, MAX_RANGE) if isprime(i)]
     P = random.choice(primes)
     G = random.choice(primRoots(P))
-    private=random.randint(2**8, 2**12)
+    private=random.randint(MIN_RANGE, MAX_RANGE)
     x = int(pow(G,private,P))
     return P, G, x, private
 
+#CODE IMPORTED https://stackoverflow.com/questions/40190849/efficient-finding-primitive-roots-modulo-n-using-python
 def primRoots(theNum):
     o = 1
     roots = []
@@ -28,7 +30,7 @@ def primRoots(theNum):
 
 def generate_keys_receiver(P,G):
 
-    private=random.randint(2**8, 2**12)
+    private=random.randint(MIN_RANGE, MAX_RANGE)
     y = int(pow(G,private,P))
 
     return y, private
