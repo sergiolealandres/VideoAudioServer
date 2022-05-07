@@ -4,6 +4,8 @@ import heapq
 import pyaudio
 import socket
 
+import call
+
 #from call import call_end
 
 CHUNK = 1024
@@ -70,10 +72,10 @@ def audio_receiver(client):
         audio_receiver_socket.bind((client.my_ip,int(client.my_data_port)-1))
 
     except OSError:
-
-        client.app.infoBox("Error", "Hay otro usuario con esta misma IP utilizando el puerto"+ str(int(client.my_data_port)-1))
-        #call_end(client)
         audio_receiver_socket.close()
+        #call.call_end(client)
+        client.app.infoBox("Error", "Hay otro usuario con esta misma IP utilizando el puerto"+ str(int(client.my_data_port)-1)+\
+            ".Hemos cerrado la transmisión de audio pero puede continuar con su llamada.")
         return
     audio_receiver_socket.settimeout(0.1)
     

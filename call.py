@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from email import message
 import errno
 from glob import glob
@@ -105,23 +106,25 @@ def call_user(target_nick,target_IP, target_port, user_IP,user_Port,semaforo,cli
             return
 
         
+        client.selected_data_port=splitted[2]
+        client.selected_nick=splitted[1]
+        try:
+            data= query(splitted[1])
+        except ServerErrorTimeout:
+            callSocket.close()
+            client.app.infoBox("Error", "DS Timeout")
+            return
+        nick, ip, control_port, versions=data
+
         semaforo.acquire()
         if(current_call == 1):
             semaforo.release()
             callSocket.close()
             raise Exception("There is already a call")
 
-
         current_call = 1
-        semaforo.release()
-
-
-        
-        client.selected_data_port=splitted[2]
-        client.selected_nick=splitted[1]
-        data= query(splitted[1])
-        nick, ip, control_port, versions=data
-
+        semaforo.release()    
+       
         client.selected_ip=ip
         
         print("post-lock call")
@@ -204,6 +207,15 @@ def call_waiter(user_Port,client,semaforo):
                 client.app.hideSubWindow("LLamada entrante", useStopFunction=False)
 
                 if client.accepted_call==1:
+                    try:
+                        data=query(words[1])
+                    except ServerErrorTimeout:
+                        connectionSocket.close()
+                        client.app.infoBox("Error", "DS Timeout")
+                        return
+                    client.selected_nick, ip, control_port, versions=data
+
+
                     semaforo.acquire()
                     if(current_call == 1):
                         semaforo.release()
@@ -214,8 +226,7 @@ def call_waiter(user_Port,client,semaforo):
                     current_call = 1
                     semaforo.release()
                     client.selected_data_port=words[2]
-                    data=query(words[1])
-                    client.selected_nick, ip, control_port, versions=data
+
 
                     if "V1" in versions and len(words)==6:
                         client.cipher=True
@@ -254,14 +265,25 @@ def call_waiter(user_Port,client,semaforo):
 
             if splitted[1]!=client.selected_nick:
                 client.app.infoBox("Error", "Los nicks no coinciden")
-                callSocket.close()
+                connectionSocket.close()
                 return
 
+
+            client.selected_data_port=splitted[2]
+            try:
+                data= query(splitted[1])
+
+            except ServerErrorTimeout:
+                connectionSocket.close()
+                client.app.infoBox("Error", "DS Timeout")
+                return
+
+            nick, ip, control_port, versions=data
             
             semaforo.acquire()
             if(current_call == 1):
                 semaforo.release()
-                callSocket.close()
+                connectionSocket.close()
                 raise Exception("There is already a call")
 
 
@@ -279,13 +301,7 @@ def call_waiter(user_Port,client,semaforo):
                     client.cifrador=AES.new(key, AES.MODE_ECB)
                 
                 else:
-
                     client.cipher=False
-
-            
-            client.selected_data_port=splitted[2]
-            data= query(splitted[1])
-            nick, ip, control_port, versions=data
 
             client.selected_ip=ip
             
@@ -345,7 +361,8 @@ def manage_call(client,connectionSocket):
         except socket.timeout:
 
             if client.end_call==1:
-                break
+                print("TERMINA")
+                return
             continue
             
 
@@ -419,11 +436,11 @@ def video_receiver(client):
         receiverSocket.bind((client.my_ip,int(client.my_data_port)))
 
     except OSError:
-
-        client.app.infoBox("Error", "Hay otro usuario con esta misma IP utilizando el puerto"+ str(client.my_data_port))
-        client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
         call_end(client)
         receiverSocket.close()
+        client.app.infoBox("Error", "Hay otro usuario con esta misma IP utilizando el puerto"+ str(client.my_data_port)+\
+            ".Por ello hemos cerrado la llamada")
+        client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
         return
             
 
@@ -450,11 +467,12 @@ def video_receiver(client):
                     data,_ = receiverSocket.recvfrom(60000)
                 except socket.timeout:
                     if client.call_hold==False:
+                        call_end(client)
                         client.app.infoBox("Info", "Hemos cerrado la llamada ya que el usuario está incativo")
                         client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
-                        call_end(client)
                         break
-
+                #print(len(data), data)
+                
                 if client.cipher==True:
 
                     data=client.cifrador.decrypt(data)
@@ -490,7 +508,8 @@ def video_receiver(client):
 
     while client.end_call == 0 and client.app.alive:
         #Set the status bar time
-        client.app.setStatusbar("Time: "+str(time.time()-client.call_time),0)
+        
+        client.app.setStatusbar("Time: "+str(timedelta(seconds=round((time.time()-client.call_time)))),0)
         
 
         if client.call_hold is False:
@@ -697,7 +716,7 @@ def video_sender(client):
             time.sleep(1.0/fps_sending - time_diff)
         
 
-
+        print("mando", len(paquete))
         senderSocket.sendto(paquete,(client.selected_ip,int(client.selected_data_port)))
     
     client.enviando.release()
@@ -714,7 +733,7 @@ def call_end(client):
         callSocket.send(message)
     except IOError as e:
         if e.errno == errno.EPIPE:
-            client.call_end=1
+            client.end_call=1
     client.end_call=1
     client.sender_event.set()
     client.receiver_event.set()

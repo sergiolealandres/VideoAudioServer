@@ -116,6 +116,7 @@ class VideoClient(object):
 				self.app.setInPadding([20,20])
 				self.app.addButtons(["Resolución Baja","Resolución Media","Resolución Alta"],self.buttonsCallback)
 		self.app.addStatusbar(fields=2)
+		self.app.setStatusbarWidth(50)
 		self.app.setStatusbar("Time: 0", 0)
 		self.app.setStatusbar("Fps: 0", 1)
 		self.app.stopSubWindow()
@@ -192,7 +193,6 @@ class VideoClient(object):
 		# ...
 
 	def stop_function(self):
-		
 		if call.current_call==1:
 			
 			call_end(self)
@@ -274,10 +274,13 @@ class VideoClient(object):
 				return
 
 			
+			try:
+				if register(self.my_nick, self.my_ip, self.my_control_port, password, self.my_versions)==False:
 
-			if register(self.my_nick, self.my_ip, self.my_control_port, password, self.my_versions)==False:
-
-				self.app.infoBox("Error","Wrong Password")
+					self.app.infoBox("Error","Wrong Password")
+					return
+			except ServerErrorTimeout:
+				self.app.infoBox("Error", "DS Timeout")
 				return
 
 			self.app.setTabbedFrameDisabledTab("Tabs", "LIST USERS", False)
@@ -294,7 +297,12 @@ class VideoClient(object):
 				self.app.infoBox("Error", "Debes de introducir algín nick")
 				return
 
-			data=query(nick)
+			try:
+				data=query(nick)
+			except ServerErrorTimeout:
+				self.app.infoBox("Error", "DS Timeout")
+				return
+
 			if data is None:
 
 				self.app.infoBox("Error", nick + " no se ha encontrado")
@@ -338,16 +346,19 @@ class VideoClient(object):
 		
 		elif button == "LLamar al usuario seleccionado":
 
-			
-			
 			user_selected = self.app.getListBox("Usuarios Registrados")
 			if user_selected == []:
 				self.app.infoBox("Error", "Seleccione un usuario a llamar.")
 				return
 
 			nick = user_selected[0]
+			try:
+				data=query(nick)
 
-			data=query(nick)
+			except ServerErrorTimeout:
+				self.app.infoBox("Error", "DS Timeout")
+				return
+			
 			if data is None:
 				self.app.infoBox("Error", nick + " no se ha encontrado")
 				return
@@ -405,7 +416,11 @@ class VideoClient(object):
 				self.call_hold=False
  
 		elif button=='Salir':
-			quit()
+			try:
+				quit()
+			except ServerErrorTimeout:
+				self.app.infoBox("Error", "DS Timeout")
+				self.app.stop() 
 	    	
 			self.app.stop() 
 

@@ -2,8 +2,14 @@ import socket
 
 serverName = 'vega.ii.uam.es'
 serverPort = 8000
-TIME_OUT=1
-buffsize=4096
+TIME_OUT=3
+LIST_TIME_OUT=1
+DS_BUFFER_SIZE=4096
+
+class ServerErrorTimeout(Exception):
+    """Raised when the server gives server error"""
+    pass
+
 def register(nick, ip, port, password, versions):
     
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -11,7 +17,13 @@ def register(nick, ip, port, password, versions):
 
     sentence = 'REGISTER '+ nick +' '+ ip +' '+ port+' '+ password+' '+versions
     clientSocket.send(sentence.encode())
-    answer = clientSocket.recv(1024)
+    clientSocket.settimeout(TIME_OUT)
+    try:
+        answer = clientSocket.recv(DS_BUFFER_SIZE)
+    except socket.timeout:
+        clientSocket.close()
+        raise ServerErrorTimeout("DS timeout")
+        
     clientSocket.close()
     if answer[:10].decode('utf-8')=='OK WELCOME':
         return True
@@ -24,8 +36,13 @@ def query(nick):
     clientSocket.connect((serverName,serverPort))
     sentence = 'QUERY '+ nick
     clientSocket.send(sentence.encode())
-    answer = clientSocket.recv(1024)
-
+    clientSocket.settimeout(TIME_OUT)
+    try:
+        answer = clientSocket.recv(DS_BUFFER_SIZE)
+    except socket.timeout:
+        clientSocket.close()
+        raise ServerErrorTimeout("DS timeout")
+        
     answer=answer.decode('utf-8')
    
     if answer is None or 'NOK USER_UNKNOWN' == answer[:16]:
@@ -46,10 +63,10 @@ def list_users():
     sentence = 'LIST_USERS'
     clientSocket.send(sentence.encode())
     answer=b''
-    clientSocket.settimeout(1)
+    clientSocket.settimeout(LIST_TIME_OUT)
     while True:   
         try:
-            answer += clientSocket.recv(buffsize)
+            answer += clientSocket.recv(DS_BUFFER_SIZE)
         except socket.timeout:
             break
         
@@ -90,6 +107,11 @@ def quit():
     clientSocket.connect((serverName,serverPort))
     sentence = 'QUIT'
     clientSocket.send(sentence.encode())
-    modifiedSentence = clientSocket.recv(1024)
-    print('Desde el servidor:', modifiedSentence)
+    clientSocket.settimeout(TIME_OUT)
+    try:
+        answer = clientSocket.recv(DS_BUFFER_SIZE)
+    except socket.timeout:
+        clientSocket.close()
+        raise ServerErrorTimeout("DS timeout")
+    print('Desde el servidor:', answer)
     clientSocket.close()
