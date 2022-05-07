@@ -95,22 +95,24 @@ def audio_receiver(client):
         if client.call_hold is False and client.deafen is False:
             try:
                 data,_= audio_receiver_socket.recvfrom(BUFF_SIZE)
+                received = True
             except socket.timeout:
-                #print("No ha llegado audio")
-                continue
-            data=data.split(b'#')
-           
-            order_num, timestamp = data[0], data[1]
-            order_num = int(order_num.decode('utf-8'))
-            timestamp=float(timestamp.decode('utf-8'))
-            frame=b"#".join(data[2:])
-            if order_num < id_ultimo_paquete_reproducido:
-                continue
+                received = False
             
-            #stream_output.write(frame)
+            if received:
+                data=data.split(b'#')
+            
+                order_num, timestamp = data[0], data[1]
+                order_num = int(order_num.decode('utf-8'))
+                timestamp=float(timestamp.decode('utf-8'))
+                frame=b"#".join(data[2:])
+                if order_num < id_ultimo_paquete_reproducido:
+                    continue
+                
+                #stream_output.write(frame)
             
 
-            heapq.heappush(buffer_circular, (order_num,timestamp, frame))
+                heapq.heappush(buffer_circular, (order_num,timestamp, frame))
 
             #Sincronización audio, video
             if len(buffer_circular) > 0:
