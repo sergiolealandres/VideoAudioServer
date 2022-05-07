@@ -502,7 +502,7 @@ def video_receiver(client):
 
                 
                 data=data.split(b'#')
-                order_num, timestamp, _, _=data[0], data[1], data[2], data[3]
+                order_num, timestamp, _, _ = data[0], data[1], data[2], data[3]
 
                 real_data=b"#".join(data[4:])
                 frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
@@ -530,24 +530,17 @@ def video_receiver(client):
 
     while client.end_call == 0 and client.app.alive:
         #Set the status bar time
-        
         client.app.setStatusbar("Time: "+str(timedelta(seconds=round((time.time()-client.call_time)))),0)
-        
 
         if client.call_hold is False:
             #Set the status bar fps
             client.app.setStatusbar("Fps: "+str(reproduction_fps),1)
-
-
-            # Retrieve message size
-            
+            #Retrieve message size
             try:
                 data,_ = receiverSocket.recvfrom(BUFF_REC_VIDEO)
                 received = True
             except socket.timeout:
-                
                 received = False
-                
 
             if received:
                 if client.cipher==True:
@@ -565,7 +558,6 @@ def video_receiver(client):
                         o con un formato incorrecto de esta")
                 
                 order_num, timestamp, _, _=data[0], data[1], data[2], data[3]
-                
                 
                 real_data=b"#".join(data[4:])
                 
@@ -587,6 +579,7 @@ def video_receiver(client):
 
             if len(buffer_circular)>0 and client.app.alive:
                 if diff < 0:
+                    
                     continue
 
                 elif diff >= 0:
@@ -611,14 +604,11 @@ def video_receiver(client):
                 # Display
                 if frame_shown is not None:
 
-                    
-                    
                     cv2_im = cv2.cvtColor(frame_shown, cv2.COLOR_BGR2RGB)
                     img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
                     client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage') 
 
                 if diff > MAX_RETARDO:
-
             
                     while len(buffer_circular) > MAX_RETARDO*reproduction_fps:
 
@@ -626,7 +616,6 @@ def video_receiver(client):
                         client.timestamp_last_image = buffer_circular[0][1]
                         id_ultimo_paquete_reproducido= buffer_circular[0][0]
                         heapq.heappop(buffer_circular)
-                
 
                         own_video = client.current_frame
                         if own_video.size > 0:
