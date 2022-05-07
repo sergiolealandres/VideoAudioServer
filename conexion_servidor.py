@@ -46,7 +46,6 @@ def query(nick):
     answer=answer.decode('utf-8')
    
     if answer is None or 'NOK USER_UNKNOWN' == answer[:16]:
-        print('Error en query')
         clientSocket.close()
         return None
 
@@ -74,7 +73,6 @@ def list_users():
     
     
     if answer is None or 'OK USERS_LIST' != answer[:13]:
-        print('Error en list')
         clientSocket.close()
         return []
 
@@ -113,5 +111,4 @@ def quit():
     except socket.timeout:
         clientSocket.close()
         raise ServerErrorTimeout("DS timeout")
-    print('Desde el servidor:', answer)
     clientSocket.close()
