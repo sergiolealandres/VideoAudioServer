@@ -384,6 +384,7 @@ def manage_call(client,connectionSocket):
 
     #CONTROL DE COMUNICACIONES:
     while client.app.alive and client.end_call == 0:
+        
         try:
             sentence = callSocket.recv(BUFF_REC)
         except socket.timeout:
@@ -394,7 +395,6 @@ def manage_call(client,connectionSocket):
             
 
         sentence = sentence.decode('utf-8')
-        
         if sentence == '':
 
             if client.app.alive:
@@ -458,7 +458,7 @@ def video_receiver(client):
         call_end(client)
         receiverSocket.close()
         client.app.infoBox("Error", "Hay otro usuario con esta misma IP utilizando el puerto"+ str(client.my_data_port)+\
-            ".Por ello hemos cerrado la llamada")
+            ".Por ello hemos cerrado la llamada",parent="Panel de la llamada")
         client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
         return
             
@@ -546,7 +546,7 @@ def video_receiver(client):
                     call_end(client)
                     
                     client.app.infoBox("Error", "Hemos cerrado la llamada porque se están recibiendo frames sin cabecera \
-                        o con un formato incorrecto de esta")
+                        o con un formato incorrecto de esta",parent="Panel de la llamada")
                 
                 order_num, timestamp, _, _=data[0], data[1], data[2], data[3]
                 
@@ -570,7 +570,7 @@ def video_receiver(client):
 
             if len(buffer_circular)>0 and client.app.alive:
                 if diff < 0:
-                    
+
                     continue
 
                 elif diff >= 0:
@@ -630,10 +630,8 @@ def video_receiver(client):
                 try:
                     _,_ = receiverSocket.recvfrom(BUFF_REC_VIDEO)
                 except socket.timeout:
-                    if client.call_hold==False:
-                        client.app.hideSubWindow("Panel de la llamada", useStopFunction=False)
-                        call_end(client)
-                        break
+                   
+                    continue
             
             #wait until resume
             while client.end_call == 0 and client.app.alive and client.call_hold is True:
@@ -733,8 +731,9 @@ def parar_llamada(client):
         callSocket.send(message)
 
     except IOError as e:
+        
         if e.errno == errno.EPIPE:
-            client.call_end=1
+            client.end_call=1
 
     
 def continuar_llamada(client):
@@ -746,9 +745,11 @@ def continuar_llamada(client):
         callSocket.send(message)
 
     except IOError as e:
+        
         if e.errno == errno.EPIPE:
-            client.call_end=1
+            client.end_call=1
 
+    
     client.call_hold = False
     client.sender_event.set()
     client.receiver_event.set()
@@ -780,4 +781,4 @@ def send_menssage(client, text):
 
     except IOError as e:
         if e.errno == errno.EPIPE:
-            client.call_end=1
+            client.end_call=1

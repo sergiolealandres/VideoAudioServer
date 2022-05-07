@@ -437,8 +437,10 @@ class VideoClient(object):
 				parar_llamada(self)
 
 		elif button =='Reanudar':
+			
 			if self.call_hold==True:
 				
+
 				continuar_llamada(self)
 				self.call_hold=False
  
@@ -459,7 +461,7 @@ class VideoClient(object):
 			self.video_mostrado=0
 			test =cv2.VideoCapture(0)
 			if test is None or not test.isOpened():
-				self.app.infoBox("Error","Ya está la cámara en uso")
+				self.app.infoBox("Error","Ya está la cámara en uso",parent="Panel de la llamada")
 				return
 
 			self.enviando=test
@@ -467,15 +469,16 @@ class VideoClient(object):
 
 		elif button == 'Capturar Pantalla':
 
+			self.video_mostrado=-1
 			self.enviando = ScreenCapturer()
 
 
 		elif button == 'Video':
-			self.app.setOnTop(stay=True)
+			#self.app.setOnTop(stay=True)
 			fichero= self.app.openBox(title=None, dirName="imgs",fileTypes=[('video', '*.gif'),\
 				 ('video', '*.mp4'),('video', '*.avi'), ('video', '*.mkv'),('video', '*.flv'),\
 					  ('video', '*.mov'),('video', '*.divx'), ('video', '*.xvid'),('video', '*.rm'),\
-						   ('video', '*.wmv'),('video', '*.mpg')], asFile=False, parent=None, multiple=False, mode='r')
+						   ('video', '*.wmv'),('video', '*.mpg')], asFile=False, parent="Panel de la llamada", multiple=False, mode='r')
 
 			if len(fichero)==0:
 				return
