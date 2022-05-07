@@ -11,6 +11,7 @@ from verification import *
 from mss import mss
 
 CAPTURA_VIDEO_SIZE = (450,337)
+CKECK_SOCKET_TIMEOUT =3
 
 class ScreenCapturer(object):
 	sct = mss()
@@ -257,12 +258,37 @@ class VideoClient(object):
 				self.buttonsCallback("Clean")
 				self.disableTabs()
 				return
+
+			if self.my_ip!=self.local_IP:
+
+				res=self.app.questionBox("Warning", "The selected IP is not the local IP.\n\
+					Are you sure you still want to register with this IP?", parent=None)
+
+				if res==False:
+					return
 			
 			checkSocket = socket.socket(socket. AF_INET, socket. SOCK_STREAM)
 			location = (self.my_ip, int(self.my_data_port))
-			resultCheck = checkSocket.connect_ex(location)
+			checkSocket.settimeout(CKECK_SOCKET_TIMEOUT)
+			try:
+				resultCheck = checkSocket.connect_ex(location)
+
+			except socket.timeout:
+
+				self.app.infoBox("Error","Try again, not valid IP")
+				checkSocket.close()
+				return
+
 			location = (self.my_ip, int(self.my_data_port)-1)
-			resultCheck_audio = checkSocket.connect_ex(location)
+
+
+			try:
+				resultCheck_audio = checkSocket.connect_ex(location)
+			except socket.timeout:
+
+				self.app.infoBox("Error","Try again, not valid IP")
+				checkSocket.close()
+				return
 			checkSocket.close()
 			if resultCheck == 0 or resultCheck_audio==0:
 				self.app.infoBox("Error",
@@ -270,7 +296,6 @@ class VideoClient(object):
 										+self.my_data_port+ " o bien el "+str(int(self.my_my_data_port)-1))
 				self.disableTabs()
 				return
-
 			
 			try:
 				if register(self.my_nick, self.my_ip, self.my_control_port, password, self.my_versions)==False:
