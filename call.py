@@ -1,24 +1,16 @@
-from datetime import datetime, timedelta
-from email import message
+from datetime import timedelta
 import errno
-from glob import glob
 import heapq
 from multiprocessing import Semaphore
-import random
 import socket
 import threading
-import pickle
 import time
 import cv2
-import struct
-import base64
 import numpy as np
-from time import sleep
 from cifrado import *
 from conexion_servidor import *
 from PIL import Image, ImageTk
 from audio import audio_receiver, audio_sender
-from concurrent.futures import ThreadPoolExecutor
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import *
 
@@ -128,8 +120,7 @@ def call_user(semaforo,client):
 
             else:
                 client.cipher=False
-            
-        print(splitted[1], client.selected_nick)
+           
 
         if splitted[1]!=client.selected_nick:
             client.app.infoBox("Error", "Los nicks no coinciden")

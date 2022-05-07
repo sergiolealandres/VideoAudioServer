@@ -31,11 +31,10 @@ class VideoClient(object):
 	camera_conected=0
 	semaforo=threading.Lock()
 	my_nick, my_ip, my_control_port, my_data_port, my_versions=None,None,None,None,None
-	imagen_no_camera="imgs/nocamera.gif"
+	
 	accepted_call=0
 	resolucion = "640x480"
-	video_para_mostrar="imgs/video_por_defecto.gif"
-	video_mostrado="imgs/video_por_defecto.gif"
+	
 	enviando=None
 	stop_sending_video=False
 	event_call=threading.Event()
@@ -51,11 +50,17 @@ class VideoClient(object):
 	chat=[]
 
 	def __init__(self, window_size):
+			
+		self.imagen_no_camera = "imgs/nocamera.gif"
+		self.video_para_mostrar =  "imgs/video_por_defecto.gif"
+		self.video_mostrado = "imgs/video_por_defecto.gif"
+
+
 		s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		s.connect(("8.8.8.8", 80))
 		self.local_IP = s.getsockname()[0]
 		s.close()
-		
+	
 		# Creamos una variable que contenga el GUI principal
 		self.app = gui("Redes2 - P2P", window_size)
 		self.app.setGuiPadding(10,10)
@@ -516,7 +521,7 @@ class VideoClient(object):
 				self.deafen = True
 			else:
 				self.deafen = False
-				self.receiver_sender_event.set()
+				self.audio_receiver_event.set()
 
 		elif button == "Send":
 			texto=self.app.getEntry("msj")
