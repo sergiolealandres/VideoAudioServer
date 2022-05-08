@@ -150,7 +150,11 @@ class VideoClient(object):
 				self.app.setFg("DarkBlue")
 				self.app.setBg("LightSkyBlue")
 
-				users=list_users()
+				try:
+					users=list_users()
+				except ServerErrorTimeout:
+					users=[]
+				
 				nicks=[user[0] for user in users]
 				self.app.addListBox("Usuarios Registrados", nicks, 0, 0, 1, 4)
 				self.app.addButton("Actualizar", self.buttonsCallback, 0, 1)
@@ -190,6 +194,7 @@ class VideoClient(object):
 		if call.current_call==1:
 			
 			call_end(self)
+
 		return True
 
 	# Establece la resolución de la imagen capturada
@@ -417,7 +422,14 @@ class VideoClient(object):
 		elif button == 'Actualizar':
 
 
-			users=list_users()
+			try:
+				users=list_users()
+
+			except ServerErrorTimeout:
+				self.app.infoBox("Error", "DS Timeout")
+				self.disableTabs()
+				return
+			
 			nicks=[user[0] for user in users]
 			self.app.updateListBox("Usuarios Registrados", nicks)
 

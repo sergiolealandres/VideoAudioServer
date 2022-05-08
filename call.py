@@ -22,7 +22,7 @@ callSocket = None
 p, g, x, private, y, key=0,0,0,0,0,0
 
 MIN_FPS = 8
-BUFF_REC_VIDEO=60000
+BUFF_REC_VIDEO=65536
 SEND_FPS=32
 HALF_QUALITY=50
 TIMEOUT_ANSWER=10
@@ -80,8 +80,15 @@ def call_user(semaforo,client):
 
         p, g, x, private = generate_keys()
         sentence+=" "+ str(p) + " " + str(g) + " " + str(x)
+    callSocket.settimeout(CALL_SOCKET_TIMEOUT)
+    try:
+        callSocket.send(sentence.encode())
+    except socket.timeout:
+        client.app.infoBox("Error", "Error al intentar llamar")
+        resetear_valores(client)
+        callSocket.close()
+        return
 
-    callSocket.send(sentence.encode())
     callSocket.settimeout(RESPONSE_TIMEOUT)
     try:
         sentence = callSocket.recv(BUFF_REC)
@@ -205,12 +212,13 @@ def call_waiter(client,semaforo):
                 client.app.infoBox("Error", "Mensaje de calling no válido")
                 callSocket.close()
                 return
-            print(current_call)
+            
             semaforo.acquire()
             current_call_value = current_call
             semaforo.release()
 
             if current_call_value == 1:
+                
                 connectionSocket.send("CALL_BUSY".encode())
                 connectionSocket.close()
                 
@@ -479,7 +487,6 @@ def video_receiver(client):
                 try:
                     data,_ = receiverSocket.recvfrom(BUFF_REC_VIDEO)
                 except socket.timeout:
-                    
                     continue
 
                 if client.cipher==True:
@@ -487,7 +494,6 @@ def video_receiver(client):
                     data=client.cifrador.decrypt(data)
                     data=unpad(data, AES.block_size)
 
-                
                 data=data.split(b'#')
                 order_num, timestamp, _, _ = data[0], data[1], data[2], data[3]
 
@@ -495,7 +501,7 @@ def video_receiver(client):
                 frame = cv2.imdecode(np.frombuffer(real_data, np.uint8), 1)
                 timestamp=float(timestamp.decode('utf-8'))
                 order_num=int(order_num.decode('utf-8'))
-
+                
                 if tiempo_ultimo_paquete != 0:
                     tiempo = time.time()
                     time_diff = tiempo - tiempo_ultimo_paquete
@@ -512,13 +518,14 @@ def video_receiver(client):
     reproduction_fps,tiempo_ultimo_paquete = llenar_buffer(buffer_circular,reproduction_fps)
    
     if(len(buffer_circular)>0):
+        
         control_time=buffer_circular[0][1]
 
 
     while client.end_call == 0 and client.app.alive:
         #Set the status bar time
         client.app.setStatusbar("Time: "+str(timedelta(seconds=round((time.time()-client.call_time)))),0)
-
+        
         if client.call_hold is False:
             #Set the status bar fps
             client.app.setStatusbar("Fps: "+str(reproduction_fps),1)
@@ -528,7 +535,7 @@ def video_receiver(client):
                 received = True
             except socket.timeout:
                 received = False
-
+            
             if received:
                 if client.cipher==True:
 
@@ -566,7 +573,7 @@ def video_receiver(client):
 
             if len(buffer_circular)>0 and client.app.alive:
                 if diff < 0:
-
+                    
                     continue
 
                 elif diff >= 0:
@@ -597,13 +604,13 @@ def video_receiver(client):
 
                 if diff > MAX_RETARDO:
             
-                    while len(buffer_circular) > MAX_RETARDO*reproduction_fps:
+                    while (len(buffer_circular) > MAX_RETARDO*reproduction_fps) and client.end_call == 0 and client.app.alive:
 
                         frame=buffer_circular[0][2]
                         client.timestamp_last_image = buffer_circular[0][1]
                         id_ultimo_paquete_reproducido= buffer_circular[0][0]
                         heapq.heappop(buffer_circular)
-
+                        
                         own_video = client.current_frame
                         if own_video.size > 0:
                             frame_shown = cv2.resize(frame, client.resolucion_tuple)
@@ -611,7 +618,7 @@ def video_receiver(client):
                             frame_shown[0:own_video.shape[0],0:own_video.shape[1]] = own_video
                         else:
                             frame_shown = cv2.resize(frame, client.resolucion_tuple)
-
+                        
                         # Display
                         if frame_shown is not None:
                             cv2_im = cv2.cvtColor(frame_shown, cv2.COLOR_BGR2RGB)
@@ -639,7 +646,7 @@ def video_receiver(client):
                     
                     if(len(buffer_circular)>0):
                         control_time=buffer_circular[0][1]
-
+    
     receiverSocket.close()
 
 def video_sender(client):
