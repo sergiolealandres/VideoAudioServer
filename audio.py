@@ -55,7 +55,6 @@ def audio_sender(client):
         time.sleep(CHUNK/RATE)
 
     audio_send_socket.close()
-    print("end_audio_sender")
 
 def audio_receiver(client):
     global p
@@ -146,5 +145,5 @@ def audio_receiver(client):
                 client.audio_receiver_event.clear()
     
     audio_receiver_socket.close()
-    print("end_audio_receiver")
+    
 
