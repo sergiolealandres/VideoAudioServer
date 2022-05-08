@@ -182,7 +182,7 @@ def call_waiter(client,semaforo):
         return None
 
     waitingSocket.listen(MAX_CONECTIONS)
-
+    
     while client.app.alive:
         try:
             connectionSocket, addr = waitingSocket.accept()
@@ -205,7 +205,7 @@ def call_waiter(client,semaforo):
                 client.app.infoBox("Error", "Mensaje de calling no válido")
                 callSocket.close()
                 return
-
+            print(current_call)
             semaforo.acquire()
             current_call_value = current_call
             semaforo.release()
@@ -388,9 +388,6 @@ def manage_call(client,connectionSocket):
         try:
             sentence = callSocket.recv(BUFF_REC)
         except socket.timeout:
-
-            if client.end_call==1:
-                return
             continue
             
 
@@ -446,7 +443,6 @@ def manage_call(client,connectionSocket):
 def video_receiver(client):
 
     frame = None
-    resolucion = None
     receiverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     receiverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 

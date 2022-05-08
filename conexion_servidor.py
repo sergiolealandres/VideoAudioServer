@@ -13,11 +13,16 @@ class ServerErrorTimeout(Exception):
 def register(nick, ip, port, password, versions):
     
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    clientSocket.connect((serverName,serverPort))
+    clientSocket.settimeout(TIME_OUT)
+    try:
+        clientSocket.connect((serverName,serverPort))
+    except socket.timeout:
+        clientSocket.close()
+        raise ServerErrorTimeout("DS timeout")
 
     sentence = 'REGISTER '+ nick +' '+ ip +' '+ port+' '+ password+' '+versions
     clientSocket.send(sentence.encode())
-    clientSocket.settimeout(TIME_OUT)
+    
     try:
         answer = clientSocket.recv(DS_BUFFER_SIZE)
     except socket.timeout:
@@ -33,10 +38,15 @@ def register(nick, ip, port, password, versions):
 def query(nick):
 
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    clientSocket.connect((serverName,serverPort))
+    clientSocket.settimeout(TIME_OUT)
+    try:
+        clientSocket.connect((serverName,serverPort))
+    except socket.timeout:
+        clientSocket.close()
+        raise ServerErrorTimeout("DS timeout")
     sentence = 'QUERY '+ nick
     clientSocket.send(sentence.encode())
-    clientSocket.settimeout(TIME_OUT)
+    
     try:
         answer = clientSocket.recv(DS_BUFFER_SIZE)
     except socket.timeout:
@@ -58,11 +68,19 @@ def query(nick):
 
 def list_users():
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    clientSocket.connect((serverName,serverPort))
+    clientSocket.settimeout(TIME_OUT)
+
+    try:
+        clientSocket.connect((serverName,serverPort))
+    except socket.timeout:
+        clientSocket.close()
+        raise ServerErrorTimeout("DS timeout")
+
+    clientSocket.settimeout(LIST_TIME_OUT)
     sentence = 'LIST_USERS'
     clientSocket.send(sentence.encode())
     answer=b''
-    clientSocket.settimeout(LIST_TIME_OUT)
+    
     while True:   
         try:
             answer += clientSocket.recv(DS_BUFFER_SIZE)
@@ -102,7 +120,11 @@ def list_users():
 
 def quit():
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    clientSocket.connect((serverName,serverPort))
+    try:
+        clientSocket.connect((serverName,serverPort))
+    except socket.timeout:
+        clientSocket.close()
+        raise ServerErrorTimeout("DS timeout")
     sentence = 'QUIT'
     clientSocket.send(sentence.encode())
     clientSocket.settimeout(TIME_OUT)

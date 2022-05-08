@@ -1,5 +1,5 @@
 import random
-from sympy import *
+from sympy import isprime
 MIN_RANGE =2**8
 MAX_RANGE= 2**12
 
