@@ -191,6 +191,7 @@ class VideoClient(object):
 		# ...
 
 	def stop_function(self):
+		
 		if call.current_call==1:
 			
 			call_end(self)

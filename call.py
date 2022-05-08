@@ -213,6 +213,7 @@ def call_waiter(client,semaforo):
                 callSocket.close()
                 return
             
+
             semaforo.acquire()
             current_call_value = current_call
             semaforo.release()
@@ -349,7 +350,7 @@ def call_waiter(client,semaforo):
         else:
             connectionSocket.close() 
         
-    waitingSocket.close()        
+    waitingSocket.close()      
 
 
 
@@ -374,6 +375,8 @@ def manage_call(client,connectionSocket):
     client.call_hold = False
     client.current_frame = np.array([])
     client.cap.release()
+    client.enviando = cv2.VideoCapture(client.video_mostrado)
+
     receiver = threading.Thread(target=video_receiver,args = (client,))
 
     sender = threading.Thread(target=video_sender,args = (client,))
@@ -429,7 +432,6 @@ def manage_call(client,connectionSocket):
 
             client.chat.append(texto)
             client.app.updateListBox("Chat", client.chat)
-    
     client.semaforo.acquire()
     current_call = 0
     client.semaforo.release()
@@ -439,11 +441,18 @@ def manage_call(client,connectionSocket):
     receiver.join()
     resetear_valores(client)
 
-    if(client.camera_conected == 1):
-        client.cap = cv2.VideoCapture(0)
-        client.app.registerEvent(client.capturaVideo)
-    else:
-        client.cap = cv2.VideoCapture(client.imagen_no_camera)
+    if client.app.alive:
+        client.app.setImage("Video mostrado", client.imagen_no_camera)
+
+    client.enviando.release()
+
+    if client.app.alive:
+        if(client.camera_conected == 1):
+            client.cap = cv2.VideoCapture(0)
+            client.app.registerEvent(client.capturaVideo)
+        else:
+            client.cap = cv2.VideoCapture(client.imagen_no_camera)
+
     return
 
 
@@ -571,6 +580,7 @@ def video_receiver(client):
                 
             diff = time.time() - control_time - 1/reproduction_fps
 
+
             if len(buffer_circular)>0 and client.app.alive:
                 if diff < 0:
                     
@@ -594,17 +604,17 @@ def video_receiver(client):
                 else:
                     frame_shown = cv2.resize(frame, client.resolucion_tuple)
                     
-
                 # Display
-                if frame_shown is not None:
+                if frame_shown is not None and client.app.alive:
 
                     cv2_im = cv2.cvtColor(frame_shown, cv2.COLOR_BGR2RGB)
                     img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
-                    client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage') 
+                    if client.app.alive:
+                        client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage') 
 
                 if diff > MAX_RETARDO:
-            
-                    while (len(buffer_circular) > MAX_RETARDO*reproduction_fps) and client.end_call == 0 and client.app.alive:
+
+                    while len(buffer_circular) > MAX_RETARDO*reproduction_fps and client.end_call == 0 and client.app.alive:
 
                         frame=buffer_circular[0][2]
                         client.timestamp_last_image = buffer_circular[0][1]
@@ -623,7 +633,8 @@ def video_receiver(client):
                         if frame_shown is not None:
                             cv2_im = cv2.cvtColor(frame_shown, cv2.COLOR_BGR2RGB)
                             img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
-                            client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage')
+                            if client.app.alive:
+                                client.app.setImageData("Video mostrado", img_tk, fmt='PhotoImage')
                     if len(buffer_circular) > 0:
                         control_time=buffer_circular[0][1]
                 
@@ -633,8 +644,7 @@ def video_receiver(client):
                 try:
                     _,_ = receiverSocket.recvfrom(BUFF_REC_VIDEO)
                 except socket.timeout:
-                   
-                    continue
+                    break
             
             #wait until resume
             while client.end_call == 0 and client.app.alive and client.call_hold is True:
@@ -654,9 +664,8 @@ def video_sender(client):
     fps_sending = SEND_FPS
     senderSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     senderSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    
+   
     order_num=0
-    client.enviando = cv2.VideoCapture(client.video_mostrado)
 
     while(client.end_call == 0):
         if client.call_hold:
@@ -702,7 +711,6 @@ def video_sender(client):
         
         senderSocket.sendto(paquete,(client.selected_ip,int(client.selected_data_port)))
     
-    client.enviando.release()
     senderSocket.close()
 
 
@@ -760,18 +768,18 @@ def continuar_llamada(client):
     client.receiver_event.set()
 
 def resetear_valores(client):
-
-    client.selected_nick, client.selected_ip, client.selected_control_port, \
-        client.selected_data_port,client.selected_version=None,None, None,None,None
-    client.searched_user=False
-    client.app.setEntry("User\t\t", "")
-    client.app.setLabel("UserInfo", "")
-    client.app.setStatusbar("Time: 0",0)
-    client.app.setStatusbar("FPS: 0",1)
-    client.cipher=False
-    client.chat=[]
-    client.app.updateListBox("Chat", client.chat)
-    client.video_mostrado="imgs/video_por_defecto.gif"
+    if client.app.alive:
+        client.selected_nick, client.selected_ip, client.selected_control_port, \
+            client.selected_data_port,client.selected_version=None,None, None,None,None
+        client.searched_user=False
+        client.app.setEntry("User\t\t", "")
+        client.app.setLabel("UserInfo", "")
+        client.app.setStatusbar("Time: 0",0)
+        client.app.setStatusbar("FPS: 0",1)
+        client.cipher=False
+        client.chat=[]
+        client.app.updateListBox("Chat", client.chat)
+        client.video_mostrado="imgs/video_por_defecto.gif"
 
 def send_menssage(client, text):
 
