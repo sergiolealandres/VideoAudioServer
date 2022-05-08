@@ -13,6 +13,8 @@ BUFF_SIZE = 65536
 PORT = 8000
 MAX_DESYNCRONIZATION = 0.2
 MAX_BUFF = 3000
+EVENT_TIMEOUT = 2
+SOCKET_TIMEOUT=0.1
 
 p = pyaudio.PyAudio()
 def audio_sender(client):
@@ -32,7 +34,7 @@ def audio_sender(client):
     while client.end_call == 0 and client.app.alive:
         if client.call_hold is True or client.mute is True:
             stream.stop_stream()
-            client.audio_sender_event.wait(timeout = 2)
+            client.audio_sender_event.wait(timeout = EVENT_TIMEOUT)
             client.audio_sender_event.clear()
             
             continue
@@ -53,6 +55,7 @@ def audio_sender(client):
         time.sleep(CHUNK/RATE)
 
     audio_send_socket.close()
+    print("end_audio_sender")
 
 def audio_receiver(client):
     global p
@@ -71,7 +74,7 @@ def audio_receiver(client):
         client.app.infoBox("Error", "Hay otro usuario con esta misma IP utilizando el puerto"+ str(int(client.my_data_port)-1)+\
             ".Hemos cerrado la transmisión de audio pero puede continuar con su llamada.")
         return
-    audio_receiver_socket.settimeout(0.1)
+    audio_receiver_socket.settimeout(SOCKET_TIMEOUT)
     
     stream_output = p.open(format=FORMAT,
                 channels=CHANNELS,
@@ -133,14 +136,15 @@ def audio_receiver(client):
         else:
             buffer_circular = []
             #clean the buffer
-            while client.end_call == 0 and client.app.alive and client.call_hold is True:
+            while client.end_call == 0 and client.app.alive and (client.call_hold is True or client.deafen is True):
                 try:
-                    _,_ = audio_receiver_socket.recvfrom(60000)
+                    _,_ = audio_receiver_socket.recvfrom(BUFF_SIZE)
                 except socket.timeout:
                     break
-            while client.end_call == 0 and client.app.alive and client.call_hold is True:
-                client.audio_receiver_event.wait(timeout=2)
+            while client.end_call == 0 and client.app.alive and (client.call_hold is True or client.deafen is True):
+                client.audio_receiver_event.wait(timeout=EVENT_TIMEOUT)
                 client.audio_receiver_event.clear()
     
     audio_receiver_socket.close()
+    print("end_audio_receiver")
 
